@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Law Year="29" Num="89" LawType="Act" PromulgateDate="1896-04-27">
+  <LawNum>明治二十九年法律第八十九号</LawNum>
+  <LawBody>
+    <LawTitle>民法（テスト用フィクスチャ）</LawTitle>
+    <MainProvision>
+      <Article Num="1">
+        <ArticleCaption>（基本原則）</ArticleCaption>
+        <ArticleTitle>第一条</ArticleTitle>
+        <Paragraph Num="1">
+          <ParagraphSentence>
+            <Sentence>私権は、公共の福祉に適合しなければならない。</Sentence>
+          </ParagraphSentence>
+        </Paragraph>
+        <Paragraph Num="2">
+          <ParagraphSentence>
+            <Sentence>権利の行使及び義務の履行は、信義に従い誠実に行わなければならない。</Sentence>
+          </ParagraphSentence>
+        </Paragraph>
+        <Paragraph Num="3">
+          <ParagraphSentence>
+            <Sentence>権利の濫用は、これを許さない。</Sentence>
+          </ParagraphSentence>
+        </Paragraph>
+      </Article>
+      <Article Num="709">
+        <ArticleCaption>（不法行為による損害賠償）</ArticleCaption>
+        <ArticleTitle>第七百九条</ArticleTitle>
+        <Paragraph Num="1">
+          <ParagraphSentence>
+            <Sentence>故意又は過失によって他人の権利又は法律上保護される利益を侵害した者は、これによって生じた損害を賠償する責任を負う。</Sentence>
+          </ParagraphSentence>
+        </Paragraph>
+      </Article>
+    </MainProvision>
+  </LawBody>
+</Law>

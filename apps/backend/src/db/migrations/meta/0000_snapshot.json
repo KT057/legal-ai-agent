@@ -1,0 +1,395 @@
+{
+  "id": "c11afa81-92e1-46ad-89c5-017287fbdede",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.chat_messages": {
+      "name": "chat_messages",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "thread_id": {
+          "name": "thread_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "content": {
+          "name": "content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "chat_messages_thread_id_chat_threads_id_fk": {
+          "name": "chat_messages_thread_id_chat_threads_id_fk",
+          "tableFrom": "chat_messages",
+          "tableTo": "chat_threads",
+          "columnsFrom": [
+            "thread_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.chat_threads": {
+      "name": "chat_threads",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.contract_reviews": {
+      "name": "contract_reviews",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "contract_id": {
+          "name": "contract_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "model": {
+          "name": "model",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "summary": {
+          "name": "summary",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "risks": {
+          "name": "risks",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "contract_reviews_contract_id_contracts_id_fk": {
+          "name": "contract_reviews_contract_id_contracts_id_fk",
+          "tableFrom": "contract_reviews",
+          "tableTo": "contracts",
+          "columnsFrom": [
+            "contract_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.contracts": {
+      "name": "contracts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.law_chunks": {
+      "name": "law_chunks",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "law_id": {
+          "name": "law_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "article_no": {
+          "name": "article_no",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "article_title": {
+          "name": "article_title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "token_count": {
+          "name": "token_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "embedding": {
+          "name": "embedding",
+          "type": "vector(1024)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "law_chunks_law_id_idx": {
+          "name": "law_chunks_law_id_idx",
+          "columns": [
+            {
+              "expression": "law_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "law_chunks_embedding_hnsw": {
+          "name": "law_chunks_embedding_hnsw",
+          "columns": [
+            {
+              "expression": "embedding",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last",
+              "opclass": "vector_cosine_ops"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "hnsw",
+          "with": {
+            "m": 16,
+            "ef_construction": 64
+          }
+        }
+      },
+      "foreignKeys": {
+        "law_chunks_law_id_law_documents_id_fk": {
+          "name": "law_chunks_law_id_law_documents_id_fk",
+          "tableFrom": "law_chunks",
+          "tableTo": "law_documents",
+          "columnsFrom": [
+            "law_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.law_documents": {
+      "name": "law_documents",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "law_num": {
+          "name": "law_num",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "law_type": {
+          "name": "law_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "promulgation_date": {
+          "name": "promulgation_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_url": {
+          "name": "source_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "raw_xml": {
+          "name": "raw_xml",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fetched_at": {
+          "name": "fetched_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
