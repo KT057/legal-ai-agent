@@ -1,4 +1,5 @@
 """Shared test setup: stub required envs before src.config is imported."""
+
 import os
 
 os.environ.setdefault("ANTHROPIC_API_KEY", "test-anthropic-key")

@@ -5,6 +5,7 @@ Usage:
     uv run python -m src.ingest.egov --law-ids 129AC0000000089,406AC0000000085
     uv run python -m src.ingest.egov --allowlist src/ingest/laws_allowlist.txt
 """
+
 from __future__ import annotations
 
 import argparse
@@ -115,9 +116,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     g.add_argument("--law-id", help="single LawId, e.g. 129AC0000000089")
     g.add_argument("--law-ids", help="comma-separated LawIds")
     g.add_argument("--allowlist", type=Path, help="path to a allowlist .txt")
-    p.add_argument(
-        "--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"]
-    )
+    p.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"])
     return p
 
 

@@ -1,4 +1,5 @@
 """Unit test for the retriever — mocks Voyage and asyncpg pool."""
+
 from __future__ import annotations
 
 import pytest

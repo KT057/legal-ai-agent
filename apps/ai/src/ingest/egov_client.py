@@ -60,7 +60,7 @@ class EgovClient:
             except (httpx.HTTPStatusError, httpx.TransportError):
                 if attempt == max_retries - 1:
                     raise
-                await asyncio.sleep(2 ** attempt)
+                await asyncio.sleep(2**attempt)
         raise RuntimeError(f"unreachable: {url}")
 
     async def fetch_law(self, law_id: str) -> FetchedLaw:

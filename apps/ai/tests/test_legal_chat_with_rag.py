@@ -1,4 +1,5 @@
 """Verify RAG injection: system block 0 cached, block 1 (RAG) NOT cached."""
+
 from __future__ import annotations
 
 from typing import Any
