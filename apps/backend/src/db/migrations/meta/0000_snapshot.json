@@ -47,12 +47,8 @@
           "name": "chat_messages_thread_id_chat_threads_id_fk",
           "tableFrom": "chat_messages",
           "tableTo": "chat_threads",
-          "columnsFrom": [
-            "thread_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["thread_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -145,12 +141,8 @@
           "name": "contract_reviews_contract_id_contracts_id_fk",
           "tableFrom": "contract_reviews",
           "tableTo": "contracts",
-          "columnsFrom": [
-            "contract_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["contract_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -295,12 +287,8 @@
           "name": "law_chunks_law_id_law_documents_id_fk",
           "tableFrom": "law_chunks",
           "tableTo": "law_documents",
-          "columnsFrom": [
-            "law_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["law_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }

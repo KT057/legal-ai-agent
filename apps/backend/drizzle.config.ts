@@ -12,6 +12,7 @@ export default defineConfig({
   out: './src/db/migrations',
   dialect: 'postgresql',
   dbCredentials: {
-    url: process.env.DATABASE_URL ?? 'postgresql://legal_ai:legal_ai_password@localhost:5432/legal_ai',
+    url:
+      process.env.DATABASE_URL ?? 'postgresql://legal_ai:legal_ai_password@localhost:5432/legal_ai',
   },
 });

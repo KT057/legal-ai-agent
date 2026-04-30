@@ -25,5 +25,9 @@ class Settings(BaseSettings):
     embedding_dim: int = 1024
     voyage_api_key: str = ""
 
+    rerank_enabled: bool = False
+    rerank_model: str = "rerank-2"
+    rerank_candidate_multiplier: int = 3
+
 
 settings = Settings()  # type: ignore[call-arg]

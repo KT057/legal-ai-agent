@@ -1,8 +1,5 @@
 import { zValidator } from '@hono/zod-validator';
-import type {
-  ContractReviewResult,
-  ContractRisk,
-} from '@legal-ai-agent/shared-types';
+import type { ContractReviewResult, ContractRisk } from '@legal-ai-agent/shared-types';
 import { desc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -19,10 +16,7 @@ export const contractsRouter = new Hono()
   .post('/review', zValidator('json', reviewBodySchema), async (c) => {
     const { title, body } = c.req.valid('json');
 
-    const [contract] = await db
-      .insert(contracts)
-      .values({ title, body })
-      .returning();
+    const [contract] = await db.insert(contracts).values({ title, body }).returning();
     if (!contract) throw new Error('failed to insert contract');
 
     const aiResult = await reviewContract({ title, body });

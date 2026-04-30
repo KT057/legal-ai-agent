@@ -14,14 +14,18 @@ import {
 import type { ContractRisk } from '@legal-ai-agent/shared-types';
 
 export const contracts = pgTable('contracts', {
-  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  id: uuid('id')
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
   title: text('title').notNull(),
   body: text('body').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const contractReviews = pgTable('contract_reviews', {
-  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  id: uuid('id')
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
   contractId: uuid('contract_id')
     .notNull()
     .references(() => contracts.id, { onDelete: 'cascade' }),
@@ -32,13 +36,17 @@ export const contractReviews = pgTable('contract_reviews', {
 });
 
 export const chatThreads = pgTable('chat_threads', {
-  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  id: uuid('id')
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
   title: text('title').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const chatMessages = pgTable('chat_messages', {
-  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  id: uuid('id')
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
   threadId: uuid('thread_id')
     .notNull()
     .references(() => chatThreads.id, { onDelete: 'cascade' }),
@@ -78,5 +86,5 @@ export const lawChunks = pgTable(
     embeddingHnswIdx: index('law_chunks_embedding_hnsw')
       .using('hnsw', table.embedding.op('vector_cosine_ops'))
       .with({ m: 16, ef_construction: 64 }),
-  })
+  }),
 );

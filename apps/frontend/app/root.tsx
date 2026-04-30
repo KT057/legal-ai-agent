@@ -19,8 +19,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </head>
       <body
         style={{
-          fontFamily:
-            '-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif',
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif',
           margin: 0,
           background: '#f7f7f8',
           color: '#1f2937',

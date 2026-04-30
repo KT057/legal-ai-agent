@@ -27,10 +27,7 @@ app.route('/api', api);
 app.onError((err, c) => {
   console.error('[backend error]', err);
   const message =
-    err.message ||
-    (err as { code?: string }).code ||
-    err.name ||
-    'internal server error';
+    err.message || (err as { code?: string }).code || err.name || 'internal server error';
   return c.json({ error: message }, 500);
 });
 

@@ -17,11 +17,14 @@
     "lint": "turbo run lint",
     "lint:ai": "cd apps/ai && uv run ruff check .",
     "lint:ai:fix": "cd apps/ai && uv run ruff check --fix .",
-    "format": "biome format --write .",
-    "format:check": "biome format .",
+    "test:ai": "cd apps/ai && uv run pytest",
+    "eval:chat": "cd apps/ai && uv run python -m evals.run --agent legal_chat",
+    "eval:research": "cd apps/ai && uv run python -m evals.run --agent research_agent",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "format:ai": "cd apps/ai && uv run ruff format .",
     "format:ai:check": "cd apps/ai && uv run ruff format --check .",
-    "vscode:install-extensions": "code --install-extension charliermarsh.ruff --install-extension biomejs.biome --install-extension ms-python.python --install-extension ms-python.vscode-pylance",
+    "vscode:install-extensions": "code --install-extension charliermarsh.ruff --install-extension dbaeumer.vscode-eslint --install-extension esbenp.prettier-vscode --install-extension ms-python.python --install-extension ms-python.vscode-pylance",
     "typecheck": "turbo run typecheck",
     "db:up": "docker compose -f docker/docker-compose.yml up -d",
     "db:down": "docker compose -f docker/docker-compose.yml down",
@@ -29,8 +32,13 @@
     "db:generate": "pnpm --filter @legal-ai-agent/backend db:generate"
   },
   "devDependencies": {
-    "@biomejs/biome": "^1.9.4",
+    "@eslint/js": "^9.15.0",
+    "eslint": "^9.15.0",
+    "eslint-config-prettier": "^9.1.0",
+    "globals": "^15.12.0",
+    "prettier": "^3.3.3",
     "turbo": "^2.3.0",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.16.0"
   }
 }

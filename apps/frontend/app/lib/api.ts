@@ -34,8 +34,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(input),
     }),
-  getThread: (id: string) =>
-    request<ChatThreadWithMessages>(`/api/chat/threads/${id}`),
+  getThread: (id: string) => request<ChatThreadWithMessages>(`/api/chat/threads/${id}`),
   postMessage: (threadId: string, content: string) =>
     request<PostChatMessageResponse>(`/api/chat/threads/${threadId}/messages`, {
       method: 'POST',

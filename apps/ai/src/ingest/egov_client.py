@@ -30,7 +30,7 @@ class EgovClient:
         )
         self._last_call: float = 0.0
 
-    async def __aenter__(self) -> "EgovClient":
+    async def __aenter__(self) -> EgovClient:
         return self
 
     async def __aexit__(self, *_: Any) -> None:

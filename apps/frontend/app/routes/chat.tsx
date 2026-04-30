@@ -12,9 +12,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const threadId = url.searchParams.get('thread');
 
   const threads = await api.listThreads();
-  const active = threadId
-    ? await api.getThread(threadId).catch(() => null)
-    : null;
+  const active = threadId ? await api.getThread(threadId).catch(() => null) : null;
   return { threads, active };
 }
 
@@ -127,13 +125,7 @@ export default function ChatRoute() {
   );
 }
 
-function ActiveThread({
-  thread,
-  isBusy,
-}: {
-  thread: ChatThreadWithMessages;
-  isBusy: boolean;
-}) {
+function ActiveThread({ thread, isBusy }: { thread: ChatThreadWithMessages; isBusy: boolean }) {
   return (
     <>
       <header

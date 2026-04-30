@@ -33,15 +33,7 @@ export default function IndexRoute() {
   );
 }
 
-function Card({
-  to,
-  title,
-  description,
-}: {
-  to: string;
-  title: string;
-  description: string;
-}) {
+function Card({ to, title, description }: { to: string; title: string; description: string }) {
   return (
     <Link
       to={to}
@@ -56,9 +48,7 @@ function Card({
         border: '1px solid #e5e7eb',
       }}
     >
-      <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 4 }}>
-        {title}
-      </div>
+      <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 4 }}>{title}</div>
       <div style={{ color: '#6b7280', fontSize: 14 }}>{description}</div>
     </Link>
   );

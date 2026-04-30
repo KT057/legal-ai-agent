@@ -1,0 +1,7 @@
+{"id": "q-001", "question": "労働基準法上の36協定とは何ですか?締結義務と届出先を教えてください", "expected_keywords": ["労働基準法", "36", "協定", "労働基準監督署"], "must_cite": true, "category": "労働"}
+{"id": "q-002", "question": "下請法の対象となる取引と、親事業者が禁止される行為を教えてください", "expected_keywords": ["下請", "親事業者", "支払遅延", "減額"], "must_cite": true, "category": "下請"}
+{"id": "q-003", "question": "個人情報保護法における要配慮個人情報の定義と取得時の同意要件は?", "expected_keywords": ["個人情報", "要配慮", "同意"], "must_cite": true, "category": "個人情報"}
+{"id": "q-004", "question": "会社法上の取締役の善管注意義務と忠実義務の違いを説明してください", "expected_keywords": ["善管注意", "忠実", "取締役"], "must_cite": true, "category": "会社"}
+{"id": "q-005", "question": "独占禁止法の不当な取引制限 (カルテル) に該当する行為と課徴金の概要", "expected_keywords": ["独占禁止法", "不当な取引制限", "カルテル", "課徴金"], "must_cite": true, "category": "競争"}
+{"id": "q-006", "question": "民法上の不法行為と債務不履行の違い、損害賠償請求における立証責任の差は?", "expected_keywords": ["不法行為", "債務不履行", "民法", "損害賠償"], "must_cite": true, "category": "民事"}
+{"id": "q-007", "question": "営業秘密として法的保護を受けるための3要件を教えてください", "expected_keywords": ["営業秘密", "秘密管理性", "有用性", "非公知性"], "must_cite": true, "category": "知財"}

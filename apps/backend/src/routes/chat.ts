@@ -36,10 +36,7 @@ const toMessage = (row: typeof chatMessages.$inferSelect): ChatMessage => ({
 
 export const chatRouter = new Hono()
   .get('/threads', async (c) => {
-    const rows = await db
-      .select()
-      .from(chatThreads)
-      .orderBy(desc(chatThreads.createdAt));
+    const rows = await db.select().from(chatThreads).orderBy(desc(chatThreads.createdAt));
     return c.json(rows.map(toThread));
   })
   .post('/threads', zValidator('json', createThreadSchema), async (c) => {
@@ -53,10 +50,7 @@ export const chatRouter = new Hono()
   })
   .get('/threads/:id', async (c) => {
     const threadId = c.req.param('id');
-    const [thread] = await db
-      .select()
-      .from(chatThreads)
-      .where(eq(chatThreads.id, threadId));
+    const [thread] = await db.select().from(chatThreads).where(eq(chatThreads.id, threadId));
     if (!thread) return c.notFound();
 
     const messages = await db
@@ -71,49 +65,42 @@ export const chatRouter = new Hono()
     };
     return c.json(result);
   })
-  .post(
-    '/threads/:id/messages',
-    zValidator('json', postMessageSchema),
-    async (c) => {
-      const threadId = c.req.param('id');
-      const { content } = c.req.valid('json');
+  .post('/threads/:id/messages', zValidator('json', postMessageSchema), async (c) => {
+    const threadId = c.req.param('id');
+    const { content } = c.req.valid('json');
 
-      const [thread] = await db
-        .select()
-        .from(chatThreads)
-        .where(eq(chatThreads.id, threadId));
-      if (!thread) return c.notFound();
+    const [thread] = await db.select().from(chatThreads).where(eq(chatThreads.id, threadId));
+    if (!thread) return c.notFound();
 
-      const [userRow] = await db
-        .insert(chatMessages)
-        .values({ threadId, role: 'user', content })
-        .returning();
-      if (!userRow) throw new Error('failed to insert user message');
+    const [userRow] = await db
+      .insert(chatMessages)
+      .values({ threadId, role: 'user', content })
+      .returning();
+    if (!userRow) throw new Error('failed to insert user message');
 
-      const history = await db
-        .select()
-        .from(chatMessages)
-        .where(eq(chatMessages.threadId, threadId))
-        .orderBy(asc(chatMessages.createdAt));
+    const history = await db
+      .select()
+      .from(chatMessages)
+      .where(eq(chatMessages.threadId, threadId))
+      .orderBy(asc(chatMessages.createdAt));
 
-      const aiResponse = await aiChat({
-        messages: history.map((m) => ({ role: m.role, content: m.content })),
-      });
+    const aiResponse = await aiChat({
+      messages: history.map((m) => ({ role: m.role, content: m.content })),
+    });
 
-      const [assistantRow] = await db
-        .insert(chatMessages)
-        .values({
-          threadId,
-          role: 'assistant',
-          content: aiResponse.content,
-        })
-        .returning();
-      if (!assistantRow) throw new Error('failed to insert assistant message');
+    const [assistantRow] = await db
+      .insert(chatMessages)
+      .values({
+        threadId,
+        role: 'assistant',
+        content: aiResponse.content,
+      })
+      .returning();
+    if (!assistantRow) throw new Error('failed to insert assistant message');
 
-      const result: PostChatMessageResponse = {
-        userMessage: toMessage(userRow),
-        assistantMessage: toMessage(assistantRow),
-      };
-      return c.json(result);
-    },
-  );
+    const result: PostChatMessageResponse = {
+      userMessage: toMessage(userRow),
+      assistantMessage: toMessage(assistantRow),
+    };
+    return c.json(result);
+  });

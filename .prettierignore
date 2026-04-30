@@ -1,0 +1,9 @@
+node_modules
+dist
+build
+.react-router
+.turbo
+coverage
+apps/ai
+pnpm-lock.yaml
+graphify-out
