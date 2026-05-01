@@ -155,6 +155,9 @@ async def review_contract(title: str, body: str) -> dict[str, Any]:
     response = await _client().messages.create(
         model=settings.anthropic_model,
         max_tokens=settings.max_tokens,
+        # 注: claude-opus-4-7 では temperature パラメータが廃止されているため
+        # 渡さない。ハルシネーション抑制はプロンプト側 (prompts/contract_review.md
+        # の「ハルシネーション防止」節) と tool_choice による構造化強制で担保。
         system=system_blocks,
         tools=[REPORT_TOOL],
         # 「自由回答禁止、必ずこのツールを呼べ」をモデルに強制。

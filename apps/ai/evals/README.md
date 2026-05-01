@@ -31,8 +31,13 @@ evals/
 
 1. **Keyword hit rate (heuristic)** — `expected_keywords` のうち、回答テキストに
    含まれる割合。安価で速く、回帰検知に向く。
-2. **LLM-as-judge (1〜5)** — 別呼び出しの Claude に質問+回答を読ませ、JSON で
+2. **Forbidden keyword violations** — `forbidden_keywords` が回答に出現した件数
+   (0 = OK、1 以上 = 違反)。架空の条番号・捏造判例名など「出てきたら即失格」を
+   定義する用途。ハルシネーション検出の軸として機能する。
+3. **LLM-as-judge (1〜5)** — 別呼び出しの Claude に質問+回答を読ませ、JSON で
    スコアを出させる。正確だがコストがかかる。`--skip-judge` で省略可能。
+   `must_refuse: true` のケースは **専用 judge prompt** に切り替わり、
+   「拒否できているか / 捏造していないか」軸で採点される。
 
 ## 実行
 
@@ -59,6 +64,9 @@ uv run python -m evals.run --agent research_agent --limit 3
 - **カテゴリを散らす**: 1 つの法令に偏ると過学習しやすい。`category` フィールドで分散
   チェック。
 - **must_cite は本気で**: 引用しないと不正解、というケースを必ず混ぜる。
+- **ハルシネーション用の "答えるべきでない" ケースも混ぜる**: 存在しない条番号、
+  架空の法令名、未来の改正、年号の整合しない判例番号などを `must_refuse: true` で
+  入れておく。この種は「分からない」と返せた方が高得点になる軸で評価される。
 
 ## 今後の拡張ポイント (= 練習問題)
 

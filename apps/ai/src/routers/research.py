@@ -25,12 +25,36 @@ class ResearchRequest(BaseModel):
     max_iterations: int = Field(default=5, ge=1, le=10)
 
 
+class ResearchCitation(BaseModel):
+    """ReAct ループ中に ``search_laws`` で引いた条文 1 件分。
+
+    フィールドは ``rag/retriever.py`` の ``Citation`` dataclass と 1:1 対応する。
+    ``research_agent.research()`` が ``[asdict(c) for c in citations_seen]`` で
+    dict 化したものを Pydantic でそのまま受け直す形。
+    """
+
+    law_id: str
+    law_title: str
+    law_num: str
+    article_no: str | None
+    article_title: str | None
+    body: str
+    source_url: str
+    score: float
+
+
 class ResearchResponse(BaseModel):
-    """``POST /research`` の出力スキーマ。``iterations`` で何往復したか分かる。"""
+    """``POST /research`` の出力スキーマ。``iterations`` で何往復したか分かる。
+
+    ``citations`` は ReAct ループ中に集めた全引用条文（ラウンドをまたいで連番）。
+    モデルが本文中で ``[citation_id=N]`` 形式で参照する N と、この配列の
+    1-origin index が対応する。
+    """
 
     model: str
     content: str
     iterations: int
+    citations: list[ResearchCitation]
 
 
 @router.post("/research", response_model=ResearchResponse)

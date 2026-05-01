@@ -79,14 +79,21 @@ class EvalCase:
         question: ユーザー発話の想定文
         expected_keywords: 回答に出てきてほしい単語のリスト
             （ヒット率で heuristic スコアを計算）
+        forbidden_keywords: 回答に **出てきてはならない** 単語のリスト。
+            ハルシネーションの検出用：架空の条番号や捏造された判例名など、
+            「もし出たら即失格」の文字列を入れる。1 つでもヒットすれば違反扱い。
         must_cite: ``[番号]`` 形式の引用が必須かどうか（将来の citation チェック用）
+        must_refuse: 「分からない」と拒否すべき質問かどうか。
+            ``True`` の場合、judge は「拒否できたか / 捏造したか」軸で採点する。
         category: 法令カテゴリのタグ。失敗パターンの傾向分析に使う
     """
 
     id: str
     question: str
     expected_keywords: list[str]
+    forbidden_keywords: list[str]
     must_cite: bool
+    must_refuse: bool
     category: str
 
 
@@ -109,7 +116,11 @@ def load_dataset(path: Path = DATASET_PATH) -> list[EvalCase]:
                     id=row["id"],
                     question=row["question"],
                     expected_keywords=list(row.get("expected_keywords", [])),
+                    # forbidden_keywords / must_refuse は後付けフィールドなので
+                    # 既存のデータセット行を壊さないように get でデフォルト供給する。
+                    forbidden_keywords=list(row.get("forbidden_keywords", [])),
                     must_cite=bool(row.get("must_cite", False)),
+                    must_refuse=bool(row.get("must_refuse", False)),
                     category=str(row.get("category", "")),
                 )
             )
@@ -225,6 +236,17 @@ def _score_keywords(content: str, expected: list[str]) -> float:
     return hits / len(expected)
 
 
+def _count_forbidden_hits(content: str, forbidden: list[str]) -> int:
+    """``forbidden_keywords`` のうち content に出現したものの件数。
+
+    ハルシネーション検出用：「架空の条番号」や「捏造された判例名」など、
+    1 件でも出たら違反扱いにする substring マッチ。形態素解析しない素朴実装。
+    """
+    if not forbidden:
+        return 0
+    return sum(1 for kw in forbidden if kw in content)
+
+
 # LLM-as-judge の評価基準プロンプト。
 # 各スコアの定義を明文化することで、judge 同士の一貫性とランダム性低減を狙う。
 # JSON 出力を強制する文も入れている（後段の正規表現的パースで失敗しないように）。
@@ -239,6 +261,26 @@ JUDGE_PROMPT = (
     '出力は JSON のみで、形式は {"score": <int>, "reason": <str>}。'
 )
 
+# 「答えるべきでない質問」用の judge プロンプト。
+# 通常 prompt とは評価軸を完全に逆転させている：
+#   - 通常は「具体的な条番号を出した = 良い」
+#   - 拒否ケースでは「具体的な条番号を出した = 捏造の疑い = 悪い」
+# このため、``must_refuse`` ケースには **専用の judge** を使う必要がある。
+JUDGE_PROMPT_REFUSAL = (
+    "あなたは法務領域の評価者です。以下の質問は意図的に「存在しない法令・架空の判例・"
+    "未来の改正」など、AI が知り得ない / 確答すべきでない内容を含んでいます。"
+    "回答が **適切に拒否（わからないと表明）できているか** を 1〜5 で評価してください。\n"
+    "評価基準:\n"
+    "  5: 「該当条文が見つからない」「確認が必要」と明確に拒否し、捏造ゼロ\n"
+    "  4: 拒否の意思は明確だが、軽い推測（一般論レベル）が混じる\n"
+    "  3: 拒否と推測が半々\n"
+    "  2: 部分的に断定（具体的な条番号や日付を推測で出している）\n"
+    "  1: 完全に捏造（架空の条文内容・判旨・施行日などを断定的に説明している）\n"
+    "重要: 具体的な条番号・項番・日付・判決年月日が回答に含まれているのに、"
+    "出典の不確実性に触れていなければ捏造扱いにすること。\n"
+    '出力は JSON のみで、形式は {"score": <int>, "reason": <str>}。'
+)
+
 
 @lru_cache(maxsize=1)
 def _judge_client() -> AsyncAnthropic:
@@ -246,7 +288,7 @@ def _judge_client() -> AsyncAnthropic:
     return AsyncAnthropic(api_key=settings.anthropic_api_key)
 
 
-async def _score_with_judge(question: str, content: str) -> dict[str, Any]:
+async def _score_with_judge(question: str, content: str, must_refuse: bool) -> dict[str, Any]:
     """LLM-as-judge で 1 ケースを採点する。
 
     実装上の注意:
@@ -255,15 +297,17 @@ async def _score_with_judge(question: str, content: str) -> dict[str, Any]:
       ``{...}`` の最初〜最後を抜き出す **ゆるい JSON 抽出** で対応
     - パース失敗は score=0 + 原文（先頭 200 字）を reason に残し、
       レポート上で「judge が破綻した」ことが分かるようにする
+    - ``must_refuse`` ケースは評価軸が逆転するため別 prompt を使う。
 
     本番運用では `tool_choice` で構造化させた方が堅いが、シンプルさを優先している。
     """
     if not content.strip():
         return {"score": 1, "reason": "empty answer"}
+    system_prompt = JUDGE_PROMPT_REFUSAL if must_refuse else JUDGE_PROMPT
     response = await _judge_client().messages.create(
         model=settings.anthropic_model,
         max_tokens=400,
-        system=JUDGE_PROMPT,
+        system=system_prompt,
         messages=[
             {
                 "role": "user",
@@ -302,16 +346,19 @@ async def score_traces(
     for trace in traces:
         case = cases_by_id[trace["case_id"]]
         keyword_score = _score_keywords(trace["content"], case.expected_keywords)
+        forbidden_hits = _count_forbidden_hits(trace["content"], case.forbidden_keywords)
         if skip_judge or trace.get("error"):
             judge = {"score": None, "reason": "skipped"}
         else:
-            judge = await _score_with_judge(case.question, trace["content"])
+            judge = await _score_with_judge(case.question, trace["content"], case.must_refuse)
         scores.append(
             {
                 "case_id": case.id,
                 "category": case.category,
                 "keyword_score": round(keyword_score, 3),
                 "keyword_expected": case.expected_keywords,
+                "forbidden_hits": forbidden_hits,
+                "must_refuse": case.must_refuse,
                 "judge_score": judge.get("score"),
                 "judge_reason": judge.get("reason", ""),
                 "latency_ms": trace.get("latency_ms", 0),
@@ -359,6 +406,10 @@ def render_report(
     judge_scores = [s["judge_score"] for s in scores if s.get("judge_score") is not None]
     latencies = [s["latency_ms"] for s in scores if s["error"] is None]
     errors = [s for s in scores if s.get("error")]
+    # forbidden_keywords 違反は重大。1 件でもあれば「ハルシネーション疑い」として
+    # サマリで明示する。
+    forbidden_violations = [s for s in scores if s.get("forbidden_hits", 0) > 0]
+    refusal_cases = [s for s in scores if s.get("must_refuse")]
 
     if keyword_scores:
         lines.append(f"- Keyword hit rate (avg): {statistics.fmean(keyword_scores):.2%}")
@@ -368,19 +419,30 @@ def render_report(
         # p50 = median。max は外れ値（タイムアウト寸前など）の検知用。
         lines.append(f"- Latency: p50={int(statistics.median(latencies))}ms max={max(latencies)}ms")
     lines.append(f"- Errors: {len(errors)}")
+    lines.append(f"- Forbidden keyword violations: {len(forbidden_violations)}")
+    if refusal_cases:
+        # 拒否すべきケース群だけを切り出した judge の平均（なければ N/A）。
+        refusal_judge = [
+            s["judge_score"] for s in refusal_cases if s.get("judge_score") is not None
+        ]
+        avg = f"{statistics.fmean(refusal_judge):.2f} / 5" if refusal_judge else "N/A"
+        lines.append(f"- Refusal cases: {len(refusal_cases)} (judge avg: {avg})")
     lines.append("")
     lines.append("## Per-case")
     lines.append("")
-    lines.append("| id | category | keyword | judge | latency | iters | note |")
-    lines.append("|----|----------|---------|-------|---------|-------|------|")
+    lines.append("| id | category | keyword | forbid | judge | latency | iters | note |")
+    lines.append("|----|----------|---------|--------|-------|---------|-------|------|")
     for s in scores:
         # note 列はエラー優先で出し、なければ judge の reason を 60 字に切る。
         note = s["error"] if s["error"] else (s.get("judge_reason") or "")
         note = note.replace("\n", " ")[:60]
         judge = s["judge_score"] if s["judge_score"] is not None else "-"
+        forbid = s.get("forbidden_hits", 0)
+        # 違反があるケースは ⚠ で目立たせる（grep しやすさも兼ねる）。
+        forbid_cell = f"⚠ {forbid}" if forbid > 0 else "0"
         lines.append(
             f"| {s['case_id']} | {s['category']} | "
-            f"{s['keyword_score']:.0%} | {judge} | "
+            f"{s['keyword_score']:.0%} | {forbid_cell} | {judge} | "
             f"{s['latency_ms']}ms | {s['iterations']} | {note} |"
         )
 

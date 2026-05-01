@@ -127,6 +127,10 @@ async def reply(messages: list[ChatTurn]) -> dict[str, Any]:
     response = await _client().messages.create(
         model=settings.anthropic_model,
         max_tokens=settings.max_tokens,
+        # 注: claude-opus-4-7 では temperature パラメータが廃止されているため
+        # 渡さない (extended thinking 系モデルはサンプリングが内部で固定される)。
+        # 決定論性とハルシネーション抑制はプロンプト側 (prompts/legal_chat.md の
+        # 「ハルシネーション防止」節) で担保している。
         system=system_blocks,
         # ChatTurn (pydantic) は API には渡せないので素の dict に戻す。
         messages=[{"role": m.role, "content": m.content} for m in messages],

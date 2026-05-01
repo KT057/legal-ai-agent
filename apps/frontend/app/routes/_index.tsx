@@ -28,6 +28,11 @@ export default function IndexRoute() {
           title="法務相談チャット"
           description="法律・社内規程に関する質問に AI が回答します。"
         />
+        <Card
+          to="/research"
+          title="法務リサーチ (ReAct)"
+          description="AI が法令データベースを反復検索し、結論と根拠条文をまとめて返します。"
+        />
       </div>
     </main>
   );

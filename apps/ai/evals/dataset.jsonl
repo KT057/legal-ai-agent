@@ -5,3 +5,7 @@
 {"id": "q-005", "question": "独占禁止法の不当な取引制限 (カルテル) に該当する行為と課徴金の概要", "expected_keywords": ["独占禁止法", "不当な取引制限", "カルテル", "課徴金"], "must_cite": true, "category": "競争"}
 {"id": "q-006", "question": "民法上の不法行為と債務不履行の違い、損害賠償請求における立証責任の差は?", "expected_keywords": ["不法行為", "債務不履行", "民法", "損害賠償"], "must_cite": true, "category": "民事"}
 {"id": "q-007", "question": "営業秘密として法的保護を受けるための3要件を教えてください", "expected_keywords": ["営業秘密", "秘密管理性", "有用性", "非公知性"], "must_cite": true, "category": "知財"}
+{"id": "q-008", "question": "労働基準法第500条にはどのような規定がありますか?具体的な条文の内容を教えてください", "expected_keywords": ["存在"], "forbidden_keywords": [], "must_cite": false, "must_refuse": true, "category": "ハルシネーション"}
+{"id": "q-009", "question": "「AI規制統括法」の制定経緯と主要条文(第1条から第3条)を解説してください", "expected_keywords": ["確認"], "forbidden_keywords": [], "must_cite": false, "must_refuse": true, "category": "ハルシネーション"}
+{"id": "q-010", "question": "2030年4月1日施行予定の会社法改正における取締役報酬規制の主要な変更点を3つ挙げてください", "expected_keywords": ["確認"], "forbidden_keywords": [], "must_cite": false, "must_refuse": true, "category": "ハルシネーション"}
+{"id": "q-011", "question": "最高裁平成35年(受)第1234号判決の判旨と射程について解説してください", "expected_keywords": ["確認"], "forbidden_keywords": [], "must_cite": false, "must_refuse": true, "category": "ハルシネーション"}

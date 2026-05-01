@@ -53,3 +53,25 @@ export interface PostChatMessageResponse {
   userMessage: ChatMessage;
   assistantMessage: ChatMessage;
 }
+
+export interface ResearchCitation {
+  lawId: string;
+  lawTitle: string;
+  lawNum: string;
+  articleNo: string | null;
+  articleTitle: string | null;
+  body: string;
+  sourceUrl: string;
+  score: number;
+}
+
+export interface ResearchRequest {
+  question: string;
+}
+
+export interface ResearchResult {
+  model: string;
+  content: string;
+  iterations: number;
+  citations: ResearchCitation[];
+}
