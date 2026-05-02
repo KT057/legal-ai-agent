@@ -35,6 +35,7 @@ from typing import Any
 from anthropic import AsyncAnthropic
 
 from ..config import settings
+from ..observability import observe, traced_messages_create
 from ..rag.retriever import Citation, retrieve
 
 LOG = logging.getLogger(__name__)
@@ -165,6 +166,7 @@ async def _execute_search_laws(
     return _format_search_result(results, offset)
 
 
+@observe(name="research_agent")
 async def research(question: str, max_iterations: int = 5) -> dict[str, Any]:
     """ReAct ループを回し、モデルがツールを呼ばなくなった時点を最終回答とする。
 
@@ -199,7 +201,9 @@ async def research(question: str, max_iterations: int = 5) -> dict[str, Any]:
     while iterations < max_iterations:
         # 各イテレーションで API を 1 回叩く。tools を渡しているので、
         # モデルは「ツールを呼ぶ」「テキストで答える」の両方を選べる状態。
-        response = await _client().messages.create(
+        response = await traced_messages_create(
+            _client(),
+            name=f"research_agent.iteration[{iterations}]",
             model=settings.anthropic_model,
             max_tokens=settings.max_tokens,
             # 注: claude-opus-4-7 では temperature パラメータが廃止されているため

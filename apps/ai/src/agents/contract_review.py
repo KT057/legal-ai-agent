@@ -27,6 +27,7 @@ from typing import Any
 from anthropic import AsyncAnthropic
 
 from ..config import settings
+from ..observability import observe, traced_messages_create
 from ..rag.formatter import format_citations
 from ..rag.retriever import retrieve
 
@@ -124,6 +125,7 @@ async def _build_rag_block(title: str, body: str) -> str:
     return format_citations(citations)
 
 
+@observe(name="contract_review")
 async def review_contract(title: str, body: str) -> dict[str, Any]:
     """契約書を Claude にレビューさせ、構造化レポートを返す。
 
@@ -152,7 +154,9 @@ async def review_contract(title: str, body: str) -> dict[str, Any]:
     if rag_context:
         system_blocks.append({"type": "text", "text": rag_context})
 
-    response = await _client().messages.create(
+    response = await traced_messages_create(
+        _client(),
+        name="contract_review.generation",
         model=settings.anthropic_model,
         max_tokens=settings.max_tokens,
         # 注: claude-opus-4-7 では temperature パラメータが廃止されているため

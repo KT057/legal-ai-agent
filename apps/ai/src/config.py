@@ -66,6 +66,17 @@ class Settings(BaseSettings):
     # rerank 用に dense 段で何倍多めに引くか。3 だと top_k=5 のとき 15 件取得 → 5 件に絞る。
     rerank_candidate_multiplier: int = 3
 
+    # === Langfuse (LLM observability, self-hosted) ===
+    # tracing_enabled が False、または public/secret キーが空のときは
+    # 計装が完全に no-op 化する（Langfuse 未起動でもアプリは正常動作）。
+    langfuse_tracing_enabled: bool = False
+    langfuse_host: str = "http://localhost:3030"
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+    # UI URL の組み立てにのみ使う (Langfuse は /project/{id}/... 配下に画面が並ぶ)。
+    # 空ならフォールバックで host だけを印字する。
+    langfuse_project_id: str = ""
+
 
 # プロセス内で 1 度だけ生成。型チェッカは BaseSettings の動的フィールドを
 # 推論できないため call-arg 警告を抑制する。

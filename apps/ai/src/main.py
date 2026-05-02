@@ -17,6 +17,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from .config import settings
+from .observability import flush_langfuse
 from .rag.db import close_pool, get_pool
 from .routers.contract_review import router as contract_review_router
 from .routers.legal_chat import router as legal_chat_router
@@ -37,6 +38,10 @@ async def lifespan(_: FastAPI):
     try:
         yield
     finally:
+        # Langfuse はバックグラウンドスレッドで非同期送信するため、
+        # プロセス終了直前に flush しないと最後の trace が落ちる。
+        # ``close_pool`` より先に呼ぶ（DB プール解放中の例外で flush をスキップしないため）。
+        flush_langfuse()
         await close_pool()
 
 

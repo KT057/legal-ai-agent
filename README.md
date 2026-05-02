@@ -104,6 +104,9 @@ pnpm dev
 | `pnpm typecheck`              | 型チェック                                    |
 | `pnpm eval:chat`              | legal_chat agent を golden データセットで評価 |
 | `pnpm eval:research`          | research_agent (ReAct) を評価                 |
+| `pnpm langfuse:up`            | Langfuse (LLM observability) を起動           |
+| `pnpm langfuse:down`          | Langfuse を停止                               |
+| `pnpm langfuse:logs`          | langfuse-web / worker のログを追尾            |
 
 ## 主要技術
 
@@ -189,21 +192,117 @@ RERANK_ENABLED=true  uv run python -m evals.run --agent legal_chat
 ## Eval (回答品質の定量評価)
 
 prompt / モデル / RAG パラメータ / reranker の効果を回帰検知 + 改善検証できるよう、
-`apps/ai/evals/` に小さな harness を入れている。詳細は `apps/ai/evals/README.md`。
+`apps/ai/evals/` に harness を入れている。**Langfuse 有効時は Dataset Run として
+自動的に UI で比較可能**、無効時はローカル JSONL/Markdown にフォールバックする 2 モード構成。
+
+### モード自動切替
+
+| 条件 | モード | データソース | スコア出力先 |
+| --- | --- | --- | --- |
+| `LANGFUSE_TRACING_ENABLED=true` + キー設定済み | Langfuse | Langfuse Dataset | Langfuse Scores (UI) |
+| 上記以外 | Local | `evals/dataset.jsonl` | `evals/runs/<ts>-<agent>/{traces,scores}.jsonl` + `report.md` |
+
+### Langfuse モード (推奨)
 
 ```bash
-# 全件 (legal_chat)
-pnpm eval:chat
+# 1. golden ケースを Langfuse Dataset に同期 (一度だけ。dataset.jsonl を SSOT)
+cd apps/ai
+uv run python -m evals.sync_dataset --name legal-ai-agent-eval
 
-# 3 件だけ + judge スキップ (CI / dry-run)
+# 2. eval 実行 (各 case を Dataset Run として記録、スコアは UI に push)
+uv run python -m evals.run --agent legal_chat
+uv run python -m evals.run --agent legal_chat --run-name "before-prompt-fix"
+
+# 3. UI で結果を確認 (Datasets → legal-ai-agent-eval → Runs)
+open http://localhost:3030/project/legal-ai-agent-project/datasets
+```
+
+UI 上では各 run で `keyword_hit_rate` / `judge_score` / `forbidden_hits` / `latency_ms`
+が並び、prompt 改修前後を 1 画面で比較できる。
+
+### Local モード (Langfuse 無効時のフォールバック)
+
+```bash
+pnpm eval:chat                                                      # 全件
 cd apps/ai && uv run python -m evals.run --agent legal_chat --limit 3 --skip-judge
-
-# ReAct 版を試す
-pnpm eval:research
+pnpm eval:research                                                  # ReAct 版
+uv run python -m evals.run --agent legal_chat --source jsonl        # 強制 Local
 ```
 
 各実行で `apps/ai/evals/runs/<timestamp>-<agent>/report.md` が生成される（`.gitignore` 済み）。
 スコア軸は **(1) keyword hit rate (heuristic)** と **(2) LLM-as-judge 1〜5** の 2 軸。
+
+## Langfuse (LLM observability, self-hosted)
+
+`apps/ai` は Anthropic SDK 直叩きで実装されているため、トレース・トークン使用量・
+レイテンシ・キャッシュヒット率の可視化に Langfuse v3 を **セルフホスト** で利用する
+（法務文書を扱う性質上、SaaS にプロンプト本文を流さない方針）。
+
+### 起動
+
+```bash
+# 1. .env の Langfuse 関連項目をセット
+#    - LANGFUSE_NEXTAUTH_SECRET / SALT / ENCRYPTION_KEY を openssl rand で生成
+#    - LANGFUSE_INIT_* (org/project/user/keys) を設定 → 初回起動で自動作成される
+#    - LANGFUSE_PUBLIC_KEY / SECRET_KEY / PROJECT_ID を init と同じ値で揃える
+#    - LANGFUSE_INIT_USER_EMAIL は実在風 (foo@example.com) でないと Zod 検証で落ちる
+
+# 2. Langfuse スタックを起動 (postgres + clickhouse + redis + minio + web + worker)
+pnpm langfuse:up
+
+# 3. ログイン
+#    http://localhost:3030 → admin@example.com / password123 (LANGFUSE_INIT_USER_*)
+#    → ダッシュボードのプロジェクトを開く: /project/legal-ai-agent-project/...
+#    → LANGFUSE_TRACING_ENABLED=true を確認
+
+# 4. 依存関係を更新 (langfuse パッケージが追加されている)
+cd apps/ai && uv sync && cd ../..
+
+# 5. AI サービスを再起動
+pnpm dev:ai
+```
+
+ログイン後の主要 URL:
+- Traces: `http://localhost:3030/project/legal-ai-agent-project/traces`
+- Datasets: `http://localhost:3030/project/legal-ai-agent-project/datasets`
+- Generations: `http://localhost:3030/project/legal-ai-agent-project/generations`
+
+`LANGFUSE_TRACING_ENABLED=false` または API キーが空の状態だと計装は完全に no-op
+になり、Langfuse が起動していなくても本体は通常通り動作する（フェールセーフ設計）。
+
+### 観測対象
+
+| trace ルート       | 計装ファイル                          |
+| ------------------ | ------------------------------------- |
+| `legal_chat`       | `apps/ai/src/agents/legal_chat.py`    |
+| `research_agent`   | `apps/ai/src/agents/research_agent.py`(ReAct iteration ごとに generation) |
+| `contract_review`  | `apps/ai/src/agents/contract_review.py` |
+| `eval.legal_chat`  | `apps/ai/evals/run.py`                |
+| `eval.research_agent` | 同上                                  |
+
+子 span として `rag.retrieve` / `rag.embed_query` / `rag.rerank` が記録される。
+Anthropic レスポンスの `cache_creation_input_tokens` / `cache_read_input_tokens` も
+`usage_details` に分解して保存されるので、UI 上でキャッシュヒット率が可視化される。
+
+### eval 連携 (Level 3: 完全移行)
+
+`evals/dataset.jsonl` を Langfuse Dataset に同期、各 eval 実行を Dataset Run として
+UI 上で比較可能。詳細は上記「Eval (回答品質の定量評価)」セクション参照。
+
+```bash
+cd apps/ai
+uv run python -m evals.sync_dataset --name legal-ai-agent-eval
+uv run python -m evals.run --agent legal_chat --run-name "experiment-A"
+# → http://localhost:3030/project/legal-ai-agent-project/datasets/legal-ai-agent-eval
+```
+
+### 注意
+
+- Langfuse 用 PostgreSQL は **アプリの pgvector DB と別コンテナ** に分離（ポートも 5433）。
+  ホスト直接接続が必要なケースは少ないが、観測 DB が肥大化してもアプリ側に影響しない。
+- ClickHouse の初回起動は 30 秒前後かかる（healthcheck の `start_period: 60s` で吸収）。
+- 本番運用では `.env` の `LANGFUSE_*_PASSWORD` / `LANGFUSE_NEXTAUTH_SECRET` /
+  `LANGFUSE_SALT` / `LANGFUSE_ENCRYPTION_KEY` を必ずランダム値に差し替える。
 
 ## トラブルシューティング
 

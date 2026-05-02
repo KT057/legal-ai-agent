@@ -29,7 +29,10 @@
     "db:up": "docker compose -f docker/docker-compose.yml up -d",
     "db:down": "docker compose -f docker/docker-compose.yml down",
     "db:migrate": "pnpm --filter @legal-ai-agent/backend db:migrate",
-    "db:generate": "pnpm --filter @legal-ai-agent/backend db:generate"
+    "db:generate": "pnpm --filter @legal-ai-agent/backend db:generate",
+    "langfuse:up": "docker compose --env-file .env -f docker/docker-compose.langfuse.yml up -d",
+    "langfuse:down": "docker compose --env-file .env -f docker/docker-compose.langfuse.yml down",
+    "langfuse:logs": "docker compose --env-file .env -f docker/docker-compose.langfuse.yml logs -f langfuse-web langfuse-worker"
   },
   "devDependencies": {
     "@eslint/js": "^9.15.0",

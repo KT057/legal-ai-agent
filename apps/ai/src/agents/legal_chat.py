@@ -25,6 +25,7 @@ from anthropic import AsyncAnthropic
 from pydantic import BaseModel
 
 from ..config import settings
+from ..observability import observe, traced_messages_create
 from ..rag.formatter import format_citations
 from ..rag.retriever import retrieve
 
@@ -88,6 +89,7 @@ async def _build_rag_block(query: str) -> str:
     return format_citations(citations)
 
 
+@observe(name="legal_chat")
 async def reply(messages: list[ChatTurn]) -> dict[str, Any]:
     """会話履歴を受け取り、Claude の応答テキストを返す。
 
@@ -124,7 +126,9 @@ async def reply(messages: list[ChatTurn]) -> dict[str, Any]:
     if rag_context:
         system_blocks.append({"type": "text", "text": rag_context})
 
-    response = await _client().messages.create(
+    response = await traced_messages_create(
+        _client(),
+        name="legal_chat.generation",
         model=settings.anthropic_model,
         max_tokens=settings.max_tokens,
         # 注: claude-opus-4-7 では temperature パラメータが廃止されているため

@@ -28,6 +28,7 @@ from functools import lru_cache
 import voyageai
 
 from ..config import settings
+from ..observability import observe
 from .db import get_pool
 
 
@@ -56,6 +57,7 @@ def _voyage() -> voyageai.AsyncClient:
     return voyageai.AsyncClient(api_key=settings.voyage_api_key)
 
 
+@observe(name="rag.embed_query")
 async def _embed_query(query: str) -> list[float]:
     """検索クエリを埋め込みベクトル（``embedding_dim`` 次元）に変換する。
 
@@ -71,6 +73,7 @@ async def _embed_query(query: str) -> list[float]:
     return list(res.embeddings[0])
 
 
+@observe(name="rag.rerank")
 async def _rerank(query: str, candidates: list[Citation], top_k: int) -> list[Citation]:
     """dense 検索の候補を Voyage rerank-2 で並べ替え。
 
@@ -98,6 +101,7 @@ async def _rerank(query: str, candidates: list[Citation], top_k: int) -> list[Ci
     return [replace(candidates[r.index], score=float(r.relevance_score)) for r in res.results]
 
 
+@observe(name="rag.retrieve")
 async def retrieve(query: str, top_k: int | None = None) -> list[Citation]:
     """クエリ文字列に近い法令条文を上位 K 件返す（dense ± rerank）。
 

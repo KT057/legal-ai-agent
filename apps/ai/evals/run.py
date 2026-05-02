@@ -9,35 +9,37 @@
   * **keyword hit rate**: 期待キーワードの出現率（heuristic、コスト 0、再現性高）
   * **LLM-as-judge**: もう 1 つの Claude に「この回答を 1〜5 で採点せよ」と頼む
     （高精度だが API コスト + ばらつき）
-* **golden dataset (JSONL)** — 各行が 1 ケース：``{id, question,
-  expected_keywords, must_cite, category}``。コミット履歴で改善を追跡できる
-  ようテキストで持つ。
-* **per-case エラー隔離** — 1 件失敗で run 全体を落とさない。trace に
-  ``error`` フィールドを残し、レポートで失敗件数を可視化する。
-* **trace の標準化** — agent ごとに戻り値構造が違っても、上位レイヤーが
-  同じスキーマで読めるよう ``model / content / latency_ms / iterations /
-  citations / usage / error`` に揃える。
+* **golden dataset の二重化** — JSONL (リポジトリにコミットして diff 追跡) と
+  Langfuse Dataset (UI から増減/比較) の両方をサポート。Langfuse 有効時は
+  Langfuse 側を SSOT として読み、scores も Langfuse にプッシュする。
+* **per-case エラー隔離** — 1 件失敗で run 全体を落とさない。
+* **Dataset Run** — Langfuse モードでは ``item.observe(run_name)`` で各 trace を
+  Dataset Run として記録し、UI 上で「prompt 改修前 vs 後」を並べて比較できる。
 
-Pipeline (一気通貫):
+Pipeline (Langfuse モード = 既定):
+
+  1. Langfuse Dataset から golden ケースを読み込む (``--source langfuse``)
+  2. 各ケースを ``item.observe(run_name=...)`` の中で agent に流し、
+     trace を Langfuse に Dataset Run として記録
+  3. keyword hit rate / forbidden_hits / judge_score を ``langfuse.score()`` で送信
+  4. 結果は Langfuse UI ({LANGFUSE_HOST}/datasets) で確認
+
+Pipeline (Local モード = Langfuse 無効時のフォールバック):
 
   1. dataset.jsonl から golden 質問を読み込む
-  2. 各質問を agent (legal_chat or research_agent) に流し、
-     trace (回答 / 引用 / トークン使用 / レイテンシ) を保存する
-  3. trace を 2 軸でスコア:
-       - 期待キーワードのヒット率 (heuristic)
-       - LLM-as-judge による回答品質スコア (1-5)
+  2. 各質問を agent に流し、trace を JSONL に保存
+  3. trace を 2 軸でスコアし、scores.jsonl に保存
   4. markdown レポートに集計を出す
 
 実行例:
 
-  uv run python -m evals.run --agent legal_chat                 # full run
-  uv run python -m evals.run --agent research_agent --limit 3   # 3 件だけ
-  uv run python -m evals.run --agent legal_chat --skip-judge    # LLM-as-judge を省略
+  uv run python -m evals.run --agent legal_chat                 # full run (auto)
+  uv run python -m evals.run --agent legal_chat --source jsonl  # 強制 Local モード
+  uv run python -m evals.run --agent research_agent --limit 3
+  uv run python -m evals.run --agent legal_chat --skip-judge
 
-出力先: apps/ai/evals/runs/<timestamp>/
-  - traces.jsonl   : 各質問の生 trace
-  - scores.jsonl   : スコアリング結果
-  - report.md      : 人間用サマリ
+出力先 (Local モードのみ): apps/ai/evals/runs/<timestamp>/
+  - traces.jsonl / scores.jsonl / report.md
 """
 
 from __future__ import annotations
@@ -59,6 +61,13 @@ from src.agents.legal_chat import ChatTurn
 from src.agents.legal_chat import reply as legal_chat_reply
 from src.agents.research_agent import research as research_agent_run
 from src.config import settings
+from src.observability import (
+    flush_langfuse,
+    get_langfuse,
+    observe,
+    traced_messages_create,
+    tracing_enabled,
+)
 
 EVAL_DIR = Path(__file__).resolve().parent
 DATASET_PATH = EVAL_DIR / "dataset.jsonl"
@@ -127,6 +136,42 @@ def load_dataset(path: Path = DATASET_PATH) -> list[EvalCase]:
     return cases
 
 
+def load_dataset_from_langfuse(name: str) -> list[EvalCase]:
+    """Langfuse Dataset から golden ケースを引いて ``EvalCase`` に詰める。
+
+    JSONL 版と同じ形に揃えることで、上位の runner / scorer から見ると
+    データソースが透過になる。``input`` / ``expected_output`` / ``metadata`` の
+    キー命名は ``evals/sync_dataset.py`` と整合させている。
+    """
+    client = get_langfuse()
+    if client is None:
+        raise RuntimeError(
+            "Langfuse client is not available. "
+            "Set LANGFUSE_TRACING_ENABLED=true and credentials, or pass --source jsonl."
+        )
+    dataset = client.get_dataset(name)
+    cases: list[EvalCase] = []
+    for item in dataset.items:
+        # Langfuse の input / expected_output は dict | str | None。
+        # sync_dataset.py が dict で書いている前提だが、UI 直編集で str になっている
+        # ケースに備えて get でフォールバック。
+        input_obj = item.input if isinstance(item.input, dict) else {}
+        expected = item.expected_output if isinstance(item.expected_output, dict) else {}
+        meta = item.metadata if isinstance(item.metadata, dict) else {}
+        cases.append(
+            EvalCase(
+                id=str(item.id),
+                question=str(input_obj.get("question", "") if input_obj else item.input or ""),
+                expected_keywords=list(expected.get("expected_keywords", [])),
+                forbidden_keywords=list(expected.get("forbidden_keywords", [])),
+                must_cite=bool(expected.get("must_cite", False)),
+                must_refuse=bool(expected.get("must_refuse", False)),
+                category=str(meta.get("category", "")),
+            )
+        )
+    return cases
+
+
 # ---------------------------------------------------------------------------
 # 2. runner
 # ---------------------------------------------------------------------------
@@ -134,6 +179,7 @@ def load_dataset(path: Path = DATASET_PATH) -> list[EvalCase]:
 # 上位の scoring / report はこの形さえ知っていれば動く。
 
 
+@observe(name="eval.legal_chat")
 async def _run_legal_chat(question: str) -> dict[str, Any]:
     """legal_chat (1-shot) を実行して標準 trace 形式に詰める。
 
@@ -153,6 +199,7 @@ async def _run_legal_chat(question: str) -> dict[str, Any]:
     }
 
 
+@observe(name="eval.research_agent")
 async def _run_research_agent(question: str) -> dict[str, Any]:
     """research_agent (ReAct) を実行して標準 trace 形式に詰める。
 
@@ -288,6 +335,7 @@ def _judge_client() -> AsyncAnthropic:
     return AsyncAnthropic(api_key=settings.anthropic_api_key)
 
 
+@observe(name="eval.judge")
 async def _score_with_judge(question: str, content: str, must_refuse: bool) -> dict[str, Any]:
     """LLM-as-judge で 1 ケースを採点する。
 
@@ -304,7 +352,9 @@ async def _score_with_judge(question: str, content: str, must_refuse: bool) -> d
     if not content.strip():
         return {"score": 1, "reason": "empty answer"}
     system_prompt = JUDGE_PROMPT_REFUSAL if must_refuse else JUDGE_PROMPT
-    response = await _judge_client().messages.create(
+    response = await traced_messages_create(
+        _judge_client(),
+        name="eval.judge.generation",
         model=settings.anthropic_model,
         max_tokens=400,
         system=system_prompt,
@@ -329,6 +379,128 @@ async def _score_with_judge(question: str, content: str, must_refuse: bool) -> d
     except json.JSONDecodeError:
         pass
     return {"score": 0, "reason": f"could not parse judge output: {text[:200]}"}
+
+
+async def run_langfuse_eval(
+    cases: list[EvalCase],
+    agent: str,
+    run_name: str,
+    dataset_name: str,
+    skip_judge: bool,
+) -> list[dict[str, Any]]:
+    """Langfuse モードの一気通貫実行 (run + score を 1 ループで処理)。
+
+    なぜ run と score を分けないか:
+    - ``item.observe(run_name=...)`` のコンテキストマネージャ内でしか trace_id が
+      取れない → score は同じイテレーションでプッシュする必要がある
+    - score を後回しにすると、trace ↔ score の整合がバッチ間で崩れた時に
+      デバッグが難しくなる
+
+    Returns
+    -------
+    各ケースのスコア辞書のリスト (Local モードの ``score_traces`` と同形式)。
+    Langfuse 側にも同等の値が ``langfuse.score`` 経由で送られる。
+    """
+    client = get_langfuse()
+    if client is None:
+        raise RuntimeError("Langfuse client is not available")
+
+    dataset = client.get_dataset(dataset_name)
+    items_by_id = {str(item.id): item for item in dataset.items}
+    runner = AGENTS[agent]
+    results: list[dict[str, Any]] = []
+
+    for case in cases:
+        item = items_by_id.get(case.id)
+        if item is None:
+            print(
+                f"  [{case.id}] not in Langfuse dataset '{dataset_name}'; "
+                f"run `python -m evals.sync_dataset --name {dataset_name}` first"
+            )
+            continue
+        print(f"  [{case.id}] {case.question[:40]}…")
+
+        # ``item.observe`` は CM。中で発行される trace を Dataset Run の 1 件として紐づける。
+        # ``@observe`` で計装済みの runner / judge は自動的にこの trace の子として収まる。
+        with item.observe(run_name=run_name) as trace_id:
+            error: str | None = None
+            try:
+                trace_data = await runner(case.question)
+            except Exception as exc:  # noqa: BLE001
+                trace_data = {
+                    "model": "",
+                    "content": "",
+                    "latency_ms": 0,
+                    "iterations": 0,
+                    "citations": [],
+                    "usage": {},
+                }
+                error = f"{type(exc).__name__}: {exc}"
+
+            keyword_score = _score_keywords(trace_data["content"], case.expected_keywords)
+            forbidden_hits = _count_forbidden_hits(trace_data["content"], case.forbidden_keywords)
+            if skip_judge or error:
+                judge: dict[str, Any] = {"score": None, "reason": "skipped"}
+            else:
+                judge = await _score_with_judge(
+                    case.question, trace_data["content"], case.must_refuse
+                )
+
+            # Langfuse へスコア送信。UI の Scores タブと Dataset Run の集計に反映される。
+            client.score(
+                trace_id=trace_id,
+                name="keyword_hit_rate",
+                value=float(keyword_score),
+                data_type="NUMERIC",
+                comment=f"expected={case.expected_keywords}",
+            )
+            client.score(
+                trace_id=trace_id,
+                name="forbidden_hits",
+                value=float(forbidden_hits),
+                data_type="NUMERIC",
+                comment="non-zero indicates hallucination",
+            )
+            if judge.get("score") is not None:
+                client.score(
+                    trace_id=trace_id,
+                    name="judge_score",
+                    value=float(judge["score"]),
+                    data_type="NUMERIC",
+                    comment=str(judge.get("reason", ""))[:500],
+                )
+            if not error and trace_data.get("latency_ms"):
+                client.score(
+                    trace_id=trace_id,
+                    name="latency_ms",
+                    value=float(trace_data["latency_ms"]),
+                    data_type="NUMERIC",
+                )
+            if error:
+                client.score(
+                    trace_id=trace_id,
+                    name="error",
+                    value=error[:500],
+                    data_type="CATEGORICAL",
+                )
+
+        results.append(
+            {
+                "case_id": case.id,
+                "category": case.category,
+                "trace_id": trace_id,
+                "keyword_score": round(keyword_score, 3),
+                "keyword_expected": case.expected_keywords,
+                "forbidden_hits": forbidden_hits,
+                "must_refuse": case.must_refuse,
+                "judge_score": judge.get("score"),
+                "judge_reason": judge.get("reason", ""),
+                "latency_ms": trace_data.get("latency_ms", 0),
+                "iterations": trace_data.get("iterations", 0),
+                "error": error,
+            }
+        )
+    return results
 
 
 async def score_traces(
@@ -464,19 +636,90 @@ async def main() -> int:
     )
     parser.add_argument("--limit", type=int, default=0, help="先頭から N 件だけ実行 (0=全件)")
     parser.add_argument("--skip-judge", action="store_true", help="LLM-as-judge を省略")
+    parser.add_argument(
+        "--source",
+        choices=["auto", "langfuse", "jsonl"],
+        default="auto",
+        help=(
+            "データセットの読み込み元。auto: tracing 有効なら langfuse、"
+            "無効なら jsonl にフォールバック"
+        ),
+    )
+    parser.add_argument(
+        "--dataset-name",
+        default="legal-ai-agent-eval",
+        help="Langfuse Dataset 名 (--source langfuse / auto 時)",
+    )
+    parser.add_argument(
+        "--run-name",
+        default="",
+        help="Langfuse Dataset Run 名 (空ならタイムスタンプ + agent から自動生成)",
+    )
     args = parser.parse_args()
 
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    use_langfuse = args.source == "langfuse" or (args.source == "auto" and tracing_enabled())
+
+    if args.source == "langfuse" and not tracing_enabled():
+        print(
+            "Error: --source langfuse but Langfuse tracing is disabled. "
+            "Set LANGFUSE_TRACING_ENABLED=true and credentials in .env.",
+        )
+        return 1
+
+    # ----- Langfuse モード -----
+    if use_langfuse:
+        run_name = args.run_name or f"{timestamp}-{args.agent}"
+        try:
+            cases = load_dataset_from_langfuse(args.dataset_name)
+        except Exception as exc:  # noqa: BLE001
+            print(f"Failed to load Langfuse dataset '{args.dataset_name}': {exc}")
+            print("Hint: run `uv run python -m evals.sync_dataset` to populate it from JSONL.")
+            return 1
+        if not cases:
+            print(
+                f"Langfuse dataset '{args.dataset_name}' is empty. "
+                f"Run `uv run python -m evals.sync_dataset --name {args.dataset_name}` first."
+            )
+            return 1
+        if args.limit > 0:
+            cases = cases[: args.limit]
+
+        print(
+            f"[1/1] running {len(cases)} cases against {args.agent} "
+            f"(langfuse mode, run_name={run_name})…"
+        )
+        scores = await run_langfuse_eval(
+            cases=cases,
+            agent=args.agent,
+            run_name=run_name,
+            dataset_name=args.dataset_name,
+            skip_judge=args.skip_judge,
+        )
+        flush_langfuse()
+
+        # Langfuse UI へのポインタを 1 ファイルだけ残す (人間用)。
+        # スコア集計は Langfuse の Dataset Run 画面で読むのが一次情報。
+        run_dir = RUNS_DIR / f"{timestamp}-{args.agent}"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        _write_langfuse_pointer(run_dir / "report.md", args, run_name, scores)
+
+        ui_url = _langfuse_dataset_url(args.dataset_name)
+        print(f"\n[done] {len(scores)} cases evaluated → {ui_url}")
+        print(f"       run_name = {run_name}")
+        print(f"       local pointer = {run_dir / 'report.md'}")
+        return 0
+
+    # ----- Local (JSONL) モード -----
     cases = load_dataset()
     if args.limit > 0:
         cases = cases[: args.limit]
     cases_by_id = {c.id: c for c in cases}
 
-    # タイムスタンプ付きディレクトリに成果物を書く。複数 run の比較がしやすい。
-    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     run_dir = RUNS_DIR / f"{timestamp}-{args.agent}"
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"[1/3] running {len(cases)} cases against {args.agent}…")
+    print(f"[1/3] running {len(cases)} cases against {args.agent} (local mode)…")
     traces = await run_traces(cases, args.agent, run_dir / "traces.jsonl")
 
     print(f"[2/3] scoring (skip_judge={args.skip_judge})…")
@@ -485,8 +728,71 @@ async def main() -> int:
     print("[3/3] writing report…")
     render_report(scores, args.agent, run_dir / "report.md")
 
+    flush_langfuse()
+
     print(f"\n→ {run_dir / 'report.md'}")
     return 0
+
+
+def _langfuse_dataset_url(dataset_name: str) -> str:
+    """Langfuse UI の Dataset 画面の URL を組み立てる。
+
+    Langfuse v3 の画面はすべて ``/project/{id}/...`` 配下に置かれる。
+    ``LANGFUSE_PROJECT_ID`` が空のときは host だけ返してログイン後に手動で
+    プロジェクトに入ってもらう (404 を避けるため ``/datasets`` は付けない)。
+    """
+    if settings.langfuse_project_id:
+        return (
+            f"{settings.langfuse_host}/project/"
+            f"{settings.langfuse_project_id}/datasets/{dataset_name}"
+        )
+    return settings.langfuse_host
+
+
+def _write_langfuse_pointer(
+    out_path: Path,
+    args: argparse.Namespace,
+    run_name: str,
+    scores: list[dict[str, Any]],
+) -> None:
+    """Langfuse モードの最小限ローカルレポート (UI への入口リンク + サマリ)。
+
+    詳細スコア・per-case 内訳は Langfuse UI 側で見るのが正規ルート。
+    ここに書くのは「いつ・どの run name で・何件流したか」の備忘だけ。
+    """
+    lines: list[str] = []
+    lines.append(f"# Eval Run (Langfuse) — {args.agent}")
+    lines.append("")
+    lines.append(f"- Run at: {datetime.now(UTC).isoformat()}")
+    lines.append(f"- Run name: `{run_name}`")
+    lines.append(f"- Dataset: `{args.dataset_name}`")
+    lines.append(f"- Cases: {len(scores)}")
+
+    keyword_scores = [s["keyword_score"] for s in scores if s["error"] is None]
+    judge_scores = [s["judge_score"] for s in scores if s.get("judge_score") is not None]
+    forbidden_violations = sum(1 for s in scores if s.get("forbidden_hits", 0) > 0)
+    errors = sum(1 for s in scores if s.get("error"))
+
+    if keyword_scores:
+        lines.append(f"- Keyword hit rate (avg): {statistics.fmean(keyword_scores):.2%}")
+    if judge_scores:
+        lines.append(f"- Judge score (avg): {statistics.fmean(judge_scores):.2f} / 5")
+    lines.append(f"- Errors: {errors}")
+    lines.append(f"- Forbidden keyword violations: {forbidden_violations}")
+    lines.append("")
+    lines.append("## View in Langfuse")
+    lines.append("")
+    if settings.langfuse_project_id:
+        base = f"{settings.langfuse_host}/project/{settings.langfuse_project_id}"
+        lines.append(f"- Datasets: {base}/datasets")
+        lines.append(f"- Dataset:  {base}/datasets/{args.dataset_name}")
+    else:
+        lines.append(f"- Host: {settings.langfuse_host}")
+        lines.append("  (LANGFUSE_PROJECT_ID 未設定。ログイン後にプロジェクトを開いて遷移)")
+    lines.append("")
+    lines.append("Per-case scores / traces / generations はすべて Langfuse UI で確認する。")
+    lines.append("ローカルファイルにはサマリのみを残している (Level 3: full migration)。")
+    out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":
