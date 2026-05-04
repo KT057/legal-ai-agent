@@ -20,6 +20,7 @@
     "test:ai": "cd apps/ai && uv run pytest",
     "eval:chat": "cd apps/ai && uv run python -m evals.run --agent legal_chat",
     "eval:research": "cd apps/ai && uv run python -m evals.run --agent research_agent",
+    "eval:draft": "cd apps/ai && uv run python -m evals.run --agent contract_draft",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "format:ai": "cd apps/ai && uv run ruff format .",

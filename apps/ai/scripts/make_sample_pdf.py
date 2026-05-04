@@ -51,7 +51,9 @@ CLAUSES: list[tuple[str, str]] = [
 ]
 
 
-def _wrap(c: canvas.Canvas, text: str, x: float, y: float, max_width: float, leading: float) -> float:
+def _wrap(
+    c: canvas.Canvas, text: str, x: float, y: float, max_width: float, leading: float
+) -> float:
     """日本語の横書きを max_width で折り返して描画。次の y を返す。"""
     line = ""
     for ch in text:

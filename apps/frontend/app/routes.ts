@@ -5,4 +5,5 @@ export default [
   route('contracts', 'routes/contracts.tsx'),
   route('chat', 'routes/chat.tsx'),
   route('research', 'routes/research.tsx'),
+  route('draft', 'routes/draft.tsx'),
 ] satisfies RouteConfig;

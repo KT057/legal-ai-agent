@@ -2,7 +2,11 @@ import type {
   ChatThread,
   ChatThreadWithMessages,
   ContractReviewResult,
+  DraftSession,
+  DraftSessionWithTurns,
+  GenerateDraftResponse,
   PostChatMessageResponse,
+  PostDraftHearingResponse,
   ResearchResult,
 } from '@legal-ai-agent/shared-types';
 
@@ -62,5 +66,22 @@ export const api = {
     request<ResearchResult>('/api/research', {
       method: 'POST',
       body: JSON.stringify(input),
+    }),
+  listDraftSessions: () => request<DraftSession[]>('/api/drafts/sessions'),
+  createDraftSession: (input: { title?: string }) =>
+    request<DraftSession>('/api/drafts/sessions', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  getDraftSession: (id: string) => request<DraftSessionWithTurns>(`/api/drafts/sessions/${id}`),
+  postDraftMessage: (sessionId: string, content: string) =>
+    request<PostDraftHearingResponse>(`/api/drafts/sessions/${sessionId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ content }),
+    }),
+  generateDraft: (sessionId: string) =>
+    request<GenerateDraftResponse>(`/api/drafts/sessions/${sessionId}/generate`, {
+      method: 'POST',
+      body: JSON.stringify({}),
     }),
 };

@@ -33,6 +33,11 @@ export default function IndexRoute() {
           title="法務リサーチ (ReAct)"
           description="AI が法令データベースを反復検索し、結論と根拠条文をまとめて返します。"
         />
+        <Card
+          to="/draft"
+          title="NDA ドラフト生成"
+          description="ヒアリング → ドラフト → セルフレビュー → 修正、の 4 段ワークフローで NDA を起案します。"
+        />
       </div>
     </main>
   );

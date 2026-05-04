@@ -57,6 +57,7 @@ from typing import Any
 
 from anthropic import AsyncAnthropic
 
+from src.agents.contract_draft import RequirementsDraft, generate_from_requirements
 from src.agents.legal_chat import ChatTurn
 from src.agents.legal_chat import reply as legal_chat_reply
 from src.agents.research_agent import research as research_agent_run
@@ -217,11 +218,51 @@ async def _run_research_agent(question: str) -> dict[str, Any]:
     }
 
 
+@observe(name="eval.contract_draft")
+async def _run_contract_draft(question: str) -> dict[str, Any]:
+    """contract_draft (4 phase) を hearing スキップで一発実行。
+
+    eval ケースの ``question`` は ``RequirementsDraft`` を camelCase JSON 文字列で
+    シリアライズしたもの (例: ``{"disclosingParty": "...", ...}``)。
+    ``generate_from_requirements()`` を呼び、最終ドラフトを ``content`` に詰める。
+
+    iterations = 3 (draft / review / revise) を固定値として返す。
+    review で検出された risks 件数は (将来的に) Langfuse の metadata で見られる。
+    """
+    try:
+        payload = json.loads(question)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"contract_draft eval case must be JSON: {exc}") from exc
+    requirements = RequirementsDraft.model_validate(payload)
+    result = await generate_from_requirements(requirements)
+    return {
+        "model": result.model,
+        # 評価対象は最終版 (final_draft)。draft_v1 ではなく revised をスコア対象にする。
+        "content": result.final_draft,
+        "latency_ms": result.latency_ms,
+        "iterations": 3,
+        "citations": result.citations,
+        "usage": {},
+    }
+
+
 # CLI で ``--agent`` に渡す名前 → runner 関数のマッピング。
 AGENTS = {
     "legal_chat": _run_legal_chat,
     "research_agent": _run_research_agent,
+    "contract_draft": _run_contract_draft,
 }
+
+
+def filter_cases_by_agent(cases: list[EvalCase], agent: str) -> list[EvalCase]:
+    """エージェント別にケースをフィルタする。
+
+    contract_draft 専用ケース (category=="contract_draft") は contract_draft でのみ走らせ、
+    legal_chat / research_agent では除外する。これにより既存 eval の挙動が保たれる。
+    """
+    if agent == "contract_draft":
+        return [c for c in cases if c.category == "contract_draft"]
+    return [c for c in cases if c.category != "contract_draft"]
 
 
 async def run_traces(
@@ -682,6 +723,7 @@ async def main() -> int:
                 f"Run `uv run python -m evals.sync_dataset --name {args.dataset_name}` first."
             )
             return 1
+        cases = filter_cases_by_agent(cases, args.agent)
         if args.limit > 0:
             cases = cases[: args.limit]
 
@@ -712,6 +754,7 @@ async def main() -> int:
 
     # ----- Local (JSONL) モード -----
     cases = load_dataset()
+    cases = filter_cases_by_agent(cases, args.agent)
     if args.limit > 0:
         cases = cases[: args.limit]
     cases_by_id = {c.id: c for c in cases}

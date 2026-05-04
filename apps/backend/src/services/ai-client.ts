@@ -1,4 +1,9 @@
-import type { ChatMessage, ContractRisk } from '@legal-ai-agent/shared-types';
+import type {
+  ChatMessage,
+  ContractRisk,
+  DraftRisk,
+  RequirementsDraft,
+} from '@legal-ai-agent/shared-types';
 import { env } from '../env.js';
 
 export interface AiContractReviewResponse {
@@ -81,4 +86,56 @@ export async function research(input: { question: string }): Promise<AiResearchR
     throw new Error(`AI service /research failed: ${res.status} ${await res.text()}`);
   }
   return (await res.json()) as AiResearchResponse;
+}
+
+export interface AiDraftHearingResponse {
+  model: string;
+  assistantMessage: string;
+  requirements: RequirementsDraft;
+  isComplete: boolean;
+  pendingQuestion: string | null;
+  missingField: string | null;
+}
+
+export async function draftHearingTurn(input: {
+  history: { role: 'user' | 'assistant'; content: string }[];
+  userMessage: string;
+  currentRequirements: RequirementsDraft;
+}): Promise<AiDraftHearingResponse> {
+  const res = await fetch(`${env.AI_SERVICE_URL}/draft/hearing`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      history: input.history,
+      userMessage: input.userMessage,
+      currentRequirements: input.currentRequirements,
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`AI service /draft/hearing failed: ${res.status} ${await res.text()}`);
+  }
+  return (await res.json()) as AiDraftHearingResponse;
+}
+
+export interface AiDraftGenerateResponse {
+  model: string;
+  draftV1: string;
+  risks: DraftRisk[];
+  reviewSummary: string;
+  finalDraft: string;
+  latencyMs: number;
+}
+
+export async function draftGenerateFull(input: {
+  requirements: RequirementsDraft;
+}): Promise<AiDraftGenerateResponse> {
+  const res = await fetch(`${env.AI_SERVICE_URL}/draft/generate`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ requirements: input.requirements }),
+  });
+  if (!res.ok) {
+    throw new Error(`AI service /draft/generate failed: ${res.status} ${await res.text()}`);
+  }
+  return (await res.json()) as AiDraftGenerateResponse;
 }

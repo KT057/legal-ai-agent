@@ -5,6 +5,7 @@ import { logger } from 'hono/logger';
 import { env } from './env.js';
 import { chatRouter } from './routes/chat.js';
 import { contractsRouter } from './routes/contracts.js';
+import { draftsRouter } from './routes/drafts.js';
 import { researchRouter } from './routes/research.js';
 
 const app = new Hono();
@@ -24,6 +25,7 @@ const api = new Hono();
 api.route('/contracts', contractsRouter);
 api.route('/chat', chatRouter);
 api.route('/research', researchRouter);
+api.route('/drafts', draftsRouter);
 app.route('/api', api);
 
 app.onError((err, c) => {

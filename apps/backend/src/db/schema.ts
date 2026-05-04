@@ -11,7 +11,13 @@ import {
   uuid,
   vector,
 } from 'drizzle-orm/pg-core';
-import type { ContractRisk } from '@legal-ai-agent/shared-types';
+import type {
+  ContractRisk,
+  DraftPhase,
+  DraftTurnMetadata,
+  DraftTurnRole,
+  RequirementsDraft,
+} from '@legal-ai-agent/shared-types';
 
 export const contracts = pgTable('contracts', {
   id: uuid('id')
@@ -66,6 +72,43 @@ export const lawDocuments = pgTable('law_documents', {
   fetchedAt: timestamp('fetched_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const draftSessions = pgTable('draft_sessions', {
+  id: uuid('id')
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  title: text('title').notNull(),
+  requirements: jsonb('requirements').$type<RequirementsDraft>().notNull().default({}),
+  status: text('status', { enum: ['hearing', 'completed'] })
+    .notNull()
+    .default('hearing'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const draftTurns = pgTable(
+  'draft_turns',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    sessionId: uuid('session_id')
+      .notNull()
+      .references(() => draftSessions.id, { onDelete: 'cascade' }),
+    phase: text('phase', { enum: ['hearing', 'draft', 'review', 'revised'] })
+      .$type<DraftPhase>()
+      .notNull(),
+    role: text('role', { enum: ['user', 'assistant', 'system'] })
+      .$type<DraftTurnRole>()
+      .notNull(),
+    content: text('content').notNull(),
+    metadata: jsonb('metadata').$type<DraftTurnMetadata>(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    sessionIdIdx: index('draft_turns_session_id_idx').on(table.sessionId),
+  }),
+);
 
 export const lawChunks = pgTable(
   'law_chunks',

@@ -19,6 +19,7 @@ from fastapi import FastAPI
 from .config import settings
 from .observability import flush_langfuse
 from .rag.db import close_pool, get_pool
+from .routers.contract_draft import router as contract_draft_router
 from .routers.contract_review import router as contract_review_router
 from .routers.legal_chat import router as legal_chat_router
 from .routers.research import router as research_router
@@ -63,3 +64,4 @@ async def health() -> dict[str, str]:
 app.include_router(contract_review_router)
 app.include_router(legal_chat_router)
 app.include_router(research_router)
+app.include_router(contract_draft_router)
