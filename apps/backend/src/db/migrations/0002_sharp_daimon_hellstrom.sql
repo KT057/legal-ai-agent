@@ -1,0 +1,1 @@
+ALTER TABLE "draft_sessions" ADD COLUMN "engine" text DEFAULT 'v1' NOT NULL;

@@ -16,10 +16,16 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { db } from '../db/client.js';
 import { draftSessions, draftTurns } from '../db/schema.js';
-import { draftGenerateFull, draftHearingTurn } from '../services/ai-client.js';
+import {
+  draftGenerateFull,
+  draftGenerateFullV2,
+  draftHearingTurn,
+  draftHearingTurnV2,
+} from '../services/ai-client.js';
 
 const createSessionSchema = z.object({
   title: z.string().min(1).max(200).optional(),
+  engine: z.enum(['v1', 'v2']).optional(),
 });
 
 const postHearingSchema = z.object({
@@ -31,6 +37,7 @@ const toSession = (row: typeof draftSessions.$inferSelect): DraftSession => ({
   title: row.title,
   requirements: row.requirements,
   status: row.status,
+  engine: row.engine,
   createdAt: row.createdAt.toISOString(),
   updatedAt: row.updatedAt.toISOString(),
 });
@@ -51,10 +58,13 @@ export const draftsRouter = new Hono()
     return c.json(rows.map(toSession));
   })
   .post('/sessions', zValidator('json', createSessionSchema), async (c) => {
-    const { title } = c.req.valid('json');
+    const { title, engine } = c.req.valid('json');
     const [row] = await db
       .insert(draftSessions)
-      .values({ title: title ?? '新しい NDA ドラフト' })
+      .values({
+        title: title ?? `新しい NDA ドラフト${engine === 'v2' ? ' [v2]' : ''}`,
+        engine: engine ?? 'v1',
+      })
       .returning();
     if (!row) throw new Error('failed to insert draft session');
     return c.json(toSession(row));
@@ -107,7 +117,10 @@ export const draftsRouter = new Hono()
         content: t.content,
       }));
 
-    const ai = await draftHearingTurn({
+    // engine 別に v1 / v2 のクライアントを呼び分ける
+    // (レスポンス shape は同一なので呼び出し側からは透過)
+    const hearingFn = session.engine === 'v2' ? draftHearingTurnV2 : draftHearingTurn;
+    const ai = await hearingFn({
       history,
       userMessage: content,
       currentRequirements: session.requirements,
@@ -152,7 +165,8 @@ export const draftsRouter = new Hono()
     const [session] = await db.select().from(draftSessions).where(eq(draftSessions.id, sessionId));
     if (!session) return c.notFound();
 
-    const ai = await draftGenerateFull({ requirements: session.requirements });
+    const generateFn = session.engine === 'v2' ? draftGenerateFullV2 : draftGenerateFull;
+    const ai = await generateFn({ requirements: session.requirements });
 
     // 3 phase 分の turn を一括 insert (順番が崩れないよう createdAt を 1ms ずつ後ろにずらす)。
     const baseTime = new Date();

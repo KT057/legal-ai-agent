@@ -58,6 +58,7 @@ from typing import Any
 from anthropic import AsyncAnthropic
 
 from src.agents.contract_draft import RequirementsDraft, generate_from_requirements
+from src.agents.contract_draft_v2 import generate_from_requirements_v2
 from src.agents.legal_chat import ChatTurn
 from src.agents.legal_chat import reply as legal_chat_reply
 from src.agents.research_agent import research as research_agent_run
@@ -246,21 +247,53 @@ async def _run_contract_draft(question: str) -> dict[str, Any]:
     }
 
 
+@observe(name="eval.contract_draft_v2")
+async def _run_contract_draft_v2(question: str) -> dict[str, Any]:
+    """contract_draft_v2 (LangGraph 4 phase) を hearing スキップで一発実行。
+
+    v1 (`_run_contract_draft`) と **同じ dataset (category="contract_draft") で
+    公平比較** できるよう、入出力形式を完全に揃えてある。
+    v2 内部の StateGraph は ``generate_from_requirements_v2`` 経由で起動する。
+
+    iterations は draft / review / revise の 3 phase + 条件ループで最大 +1 = 4。
+    """
+    try:
+        payload = json.loads(question)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"contract_draft_v2 eval case must be JSON: {exc}") from exc
+    requirements = RequirementsDraft.model_validate(payload)
+    result = await generate_from_requirements_v2(requirements)
+    return {
+        "model": result.model,
+        # v1 と同じく最終版を評価対象にする (revise の後の final_draft)。
+        "content": result.final_draft,
+        "latency_ms": result.latency_ms,
+        # 条件ループが回ったかどうかは将来 metadata で取れるようにする。
+        # 現状は固定 3 (LangGraph がループしたら 4 だが、ここでは既知数として扱う)
+        "iterations": 3,
+        "citations": result.citations,
+        "usage": {},
+    }
+
+
 # CLI で ``--agent`` に渡す名前 → runner 関数のマッピング。
 AGENTS = {
     "legal_chat": _run_legal_chat,
     "research_agent": _run_research_agent,
     "contract_draft": _run_contract_draft,
+    "contract_draft_v2": _run_contract_draft_v2,
 }
 
 
 def filter_cases_by_agent(cases: list[EvalCase], agent: str) -> list[EvalCase]:
     """エージェント別にケースをフィルタする。
 
-    contract_draft 専用ケース (category=="contract_draft") は contract_draft でのみ走らせ、
-    legal_chat / research_agent では除外する。これにより既存 eval の挙動が保たれる。
+    contract_draft / contract_draft_v2 は **同じ dataset** (category="contract_draft")
+    を共有することで、v1 と v2 を公平比較できるようにしている。
+    legal_chat / research_agent では contract_draft 系ケースを除外し、
+    既存 eval の挙動を保つ。
     """
-    if agent == "contract_draft":
+    if agent in ("contract_draft", "contract_draft_v2"):
         return [c for c in cases if c.category == "contract_draft"]
     return [c for c in cases if c.category != "contract_draft"]
 

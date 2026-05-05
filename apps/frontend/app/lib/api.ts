@@ -2,6 +2,7 @@ import type {
   ChatThread,
   ChatThreadWithMessages,
   ContractReviewResult,
+  DraftEngine,
   DraftSession,
   DraftSessionWithTurns,
   GenerateDraftResponse,
@@ -68,7 +69,7 @@ export const api = {
       body: JSON.stringify(input),
     }),
   listDraftSessions: () => request<DraftSession[]>('/api/drafts/sessions'),
-  createDraftSession: (input: { title?: string }) =>
+  createDraftSession: (input: { title?: string; engine?: DraftEngine }) =>
     request<DraftSession>('/api/drafts/sessions', {
       method: 'POST',
       body: JSON.stringify(input),

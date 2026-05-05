@@ -13,6 +13,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import type {
   ContractRisk,
+  DraftEngine,
   DraftPhase,
   DraftTurnMetadata,
   DraftTurnRole,
@@ -82,6 +83,10 @@ export const draftSessions = pgTable('draft_sessions', {
   status: text('status', { enum: ['hearing', 'completed'] })
     .notNull()
     .default('hearing'),
+  engine: text('engine', { enum: ['v1', 'v2'] })
+    .$type<DraftEngine>()
+    .notNull()
+    .default('v1'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

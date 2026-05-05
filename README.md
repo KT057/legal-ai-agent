@@ -82,14 +82,14 @@ pnpm dev
 
 ## 動作確認
 
-| 確認項目             | 手順                                                                                         |
-| -------------------- | -------------------------------------------------------------------------------------------- |
-| AI ヘルス            | `curl http://localhost:8000/health`                                                          |
-| Backend ヘルス       | `curl http://localhost:3001/api/health`                                                      |
-| 契約書レビュー       | `/contracts` で NDA などを貼り付け or PDF アップロード → リスク指摘が返る                    |
-| 法務相談チャット     | `/chat` で新規スレッド作成 → 質問送信 → 回答が返る                                           |
-| 法務リサーチ (ReAct) | `curl POST /api/research` または `/research` 画面で質問送信                                  |
-| NDA ドラフト生成     | `/draft` で新規セッション → 要件をヒアリング → 「ドラフトを生成」で draft → review → revised |
+| 確認項目             | 手順                                                                                                                   |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| AI ヘルス            | `curl http://localhost:8000/health`                                                                                    |
+| Backend ヘルス       | `curl http://localhost:3001/api/health`                                                                                |
+| 契約書レビュー       | `/contracts` で NDA などを貼り付け or PDF アップロード → リスク指摘が返る                                              |
+| 法務相談チャット     | `/chat` で新規スレッド作成 → 質問送信 → 回答が返る                                                                     |
+| 法務リサーチ (ReAct) | `curl POST /api/research` または `/research` 画面で質問送信                                                            |
+| NDA ドラフト生成     | `/draft` で engine (v1 / v2) を選んで新規セッション → 要件をヒアリング → 「ドラフトを生成」で draft → review → revised |
 
 ## スクリプト
 
@@ -106,7 +106,8 @@ pnpm dev
 | `pnpm typecheck`              | 型チェック                                    |
 | `pnpm eval:chat`              | legal_chat agent を golden データセットで評価 |
 | `pnpm eval:research`          | research_agent (ReAct) を評価                 |
-| `pnpm eval:draft`             | contract_draft (4 phase) を評価               |
+| `pnpm eval:draft`             | contract_draft v1 (直接 SDK 4 phase) を評価   |
+| `pnpm eval:draft:v2`          | contract_draft v2 (LangGraph) を評価          |
 | `pnpm langfuse:up`            | Langfuse (LLM observability) を起動           |
 | `pnpm langfuse:down`          | Langfuse を停止                               |
 | `pnpm langfuse:logs`          | langfuse-web / worker のログを追尾            |
@@ -159,20 +160,23 @@ uv run python -m src.ingest.egov --allowlist src/ingest/laws_allowlist.txt
 `RAG_ENABLED=false` を設定すると RAG ブロックの注入をスキップする。
 プロンプトキャッシュは静的システムプロンプトのみに適用され、RAG ブロックは別ブロックでキャッシュされない。
 
-## エージェントの 3 形態
+## エージェントの 4 形態
 
-このリポジトリでは Claude Anthropic SDK を使ったエージェントを 3 つの典型パターンで実装している。
-学習目的で「同じ問題に対する設計の違い」「単発生成 vs 反復 vs 多段ワークフロー」が
+このリポジトリでは Claude Anthropic SDK / LangGraph を使ったエージェントを 4 つの典型パターンで実装している。
+学習目的で「同じ問題に対する設計の違い」「単発生成 vs 反復 vs 多段ワークフロー vs declarative DAG」が
 並べて読めるようにしている。
 
-| 形態                           | 場所                                   | 動作                                                                                                                                                    | 強み                                            | 弱み                                                      |
-| ------------------------------ | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | --------------------------------------------------------- |
-| **RAG injection (1-shot)**     | `apps/ai/src/agents/legal_chat.py`     | クエリで 1 回 retrieve → 結果をシステムブロックに注入 → 1 回生成                                                                                        | 速い・トークン安い・キャッシュが効く            | 最初の検索で外したらリカバリ不能                          |
-| **ReAct loop**                 | `apps/ai/src/agents/research_agent.py` | tool (`search_laws`) を Claude に渡し、`tool_use` → `tool_result` のラリーを `max_iterations` まで回し、収束した時点で最終回答                          | クエリを反復で洗練できる・観察 → 行動の循環     | 遅い・トークンが嵩む・無限ループ防止が必要                |
-| **Multi-phase workflow (NDA)** | `apps/ai/src/agents/contract_draft.py` | hearing (tool_choice="any" で要件抽出) → draft (Markdown 生成) → review (`report_review` tool で構造化リスク抽出) → revise (検出リスクを反映した最終版) | human-in-the-loop なヒアリング + 自己改善ループ | 1 セッションで 4 phase 分の API コール (latency 90〜180s) |
+| 形態                          | 場所                                      | 動作                                                                                                                                                            | 強み                                                       | 弱み                                                                |
+| ----------------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------- |
+| **RAG injection (1-shot)**    | `apps/ai/src/agents/legal_chat.py`        | クエリで 1 回 retrieve → 結果をシステムブロックに注入 → 1 回生成                                                                                                | 速い・トークン安い・キャッシュが効く                       | 最初の検索で外したらリカバリ不能                                    |
+| **ReAct loop**                | `apps/ai/src/agents/research_agent.py`    | tool (`search_laws`) を Claude に渡し、`tool_use` → `tool_result` のラリーを `max_iterations` まで回し、収束した時点で最終回答                                  | クエリを反復で洗練できる・観察 → 行動の循環                | 遅い・トークンが嵩む・無限ループ防止が必要                          |
+| **Multi-phase workflow (v1)** | `apps/ai/src/agents/contract_draft.py`    | hearing (tool_choice="any" で要件抽出) → draft → review (`report_review` tool で構造化リスク抽出) → revise の 4 phase を直接 SDK + Python の `await` で順次実行 | 制御フローが Python に閉じる・依存最小・明示的で読みやすい | 条件分岐 / 循環を増やすと if/while で散らかりやすい                 |
+| **LangGraph StateGraph (v2)** | `apps/ai/src/agents/contract_draft_v2.py` | 同じ 4 phase ワークフローを LangGraph の StateGraph で declarative に組み、revise 後に高/中リスクが多ければ条件付きで再 revise を 1 周回す                      | 条件分岐・循環・チェックポイントを宣言的に書ける           | 依存追加 (`langgraph` / `langchain-anthropic`) と抽象層の学習コスト |
 
 `POST /research` で ReAct 版を直接叩ける（`{"question": "...", "max_iterations": 5}`）。
-`POST /draft/hearing` / `POST /draft/generate` で NDA ドラフトワークフローを叩ける。
+`POST /draft/hearing` / `POST /draft/generate` で v1 (直接 SDK) を、
+`POST /draft-v2/hearing` / `POST /draft-v2/generate` で v2 (LangGraph) を叩ける。
+`/draft` 画面の「engine」ラジオで v1 / v2 を切り替えるとサイドバーに `[v1]` / `[v2 LG]` バッジが付く。
 
 ### NDA ドラフト生成 (multi-phase agentic workflow)
 
@@ -224,6 +228,43 @@ curl -X POST http://localhost:8000/draft/generate \
     }
   }'
 # → draftV1 / risks / reviewSummary / finalDraft が返る (latency 90〜180s)
+```
+
+### v1 vs v2: 直接 SDK と LangGraph の書き比べ
+
+同じワークフロー (hearing → draft → review → revise) を 2 通りで実装し、
+**コード読み比べと eval スコア比較** ができるようにしてある。
+
+| 観点                 | v1 (`contract_draft.py`)                                                        | v2 (`contract_draft_v2.py`)                                                                                                |
+| -------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| 依存                 | `anthropic` のみ                                                                | `anthropic` + `langgraph` + `langchain-anthropic`                                                                          |
+| LLM クライアント     | `AsyncAnthropic` を `_client()` でシングルトン                                  | `ChatAnthropic` (LangChain ラッパ) を `_llm()` でシングルトン                                                              |
+| 制御フローの書き方   | `await draft → await review → await revise` を関数内で直書き                    | `StateGraph` に `add_node` / `add_edge` / `add_conditional_edges` を declarative に並べて `compile().ainvoke()`            |
+| state の持ち方       | 関数引数 + ローカル変数 + 戻り値 dict                                           | `TypedDict` (`HearingState`, `GenerateState`) を node 間で merge                                                           |
+| tool 呼び出し        | `messages.create(..., tools=..., tool_choice=...)` を直接書く                   | `llm.bind_tools(TOOLS, tool_choice=...)` で runnable を作る → `ainvoke()`、結果は `AIMessage.tool_calls[i]["args"]` に入る |
+| 強制ツール呼び出し   | `tool_choice={"type": "any"}` / `{"type": "tool", "name": "..."}`               | 同形式を文字列 `"any"` または同じ dict で渡す (LangChain が adapter)                                                       |
+| プロンプトキャッシュ | `system=[{"type":"text","text":...,"cache_control":{"type":"ephemeral"}}, ...]` | `SystemMessage(content=[{...},{...}])` の各要素に `cache_control` を入れる (adapter が透過)                                |
+| Langfuse 計装        | `@observe` + `traced_messages_create` で 1 generation/呼び出し                  | `@observe` のみ (LangChain native の callback は今回入れていない)                                                          |
+| 条件分岐 / 循環      | `if`/`while` で書く必要がある                                                   | `add_conditional_edges("revise", should_loop, {"revise": "revise", END: END})` で 1 行                                     |
+| 学習価値             | Anthropic SDK の挙動が透けて見える・最小依存で読みやすい                        | declarative DAG + state machine の感覚を実コードで体験できる                                                               |
+
+**v2 で差別化した条件ループ** (`should_loop`):
+
+- `revise_count >= 2` で必ず `END` (暴走防止)
+- `risks` に high が 1 件以上 OR medium が 5 件以上あれば `revise` に戻る
+- そうでなければ `END`
+
+これにより、品質懸念が大きい時だけ追加で 1 周回す挙動を **5 行ほどの判定関数 +
+1 行の `add_conditional_edges`** で表現できる (v1 で同じことをすると、generate 関数の
+中に `while` ループとガード条件を埋め込む必要がある)。
+
+**eval で公平比較**:
+
+```bash
+# 同じ golden case (draft-001..004) を v1/v2 双方で走らせる
+pnpm eval:draft         --run-name baseline-v1
+pnpm eval:draft:v2      --run-name baseline-v2
+# Langfuse UI で keyword_hit_rate / judge_score / latency_ms を 2 run 並列比較
 ```
 
 ## reranker (オプトイン)

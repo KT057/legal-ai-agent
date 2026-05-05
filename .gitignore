@@ -39,3 +39,8 @@ apps/ai/evals/runs
 
 # sample assets (生成物・サイズ大)
 apps/ai/scripts/sample_nda.pdf
+
+# playwright-mcp
+.playwright-mcp
+
+.claude/scheduled_tasks.lock

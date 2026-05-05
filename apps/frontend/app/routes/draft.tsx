@@ -1,5 +1,6 @@
 import {
   REQUIREMENT_FIELDS,
+  type DraftEngine,
   type DraftRisk,
   type DraftSessionWithTurns,
   type DraftTurn,
@@ -38,7 +39,9 @@ export async function action({ request }: Route.ActionArgs) {
 
   if (intent === 'create-session') {
     const title = String(formData.get('title') ?? '').trim() || undefined;
-    const session = await api.createDraftSession({ title });
+    const engineRaw = String(formData.get('engine') ?? 'v1');
+    const engine: DraftEngine = engineRaw === 'v2' ? 'v2' : 'v1';
+    const session = await api.createDraftSession({ title, engine });
     return redirect(`/draft?session=${session.id}`);
   }
 
@@ -96,8 +99,28 @@ export default function DraftRoute() {
         <Link to="/" style={{ color: '#2563eb', fontSize: 13 }}>
           ← ホーム
         </Link>
-        <Form method="post">
+        <Form method="post" style={{ display: 'grid', gap: 6 }}>
           <input type="hidden" name="intent" value="create-session" />
+          <fieldset
+            style={{
+              border: '1px solid #e5e7eb',
+              borderRadius: 6,
+              padding: '6px 10px',
+              fontSize: 12,
+            }}
+          >
+            <legend style={{ padding: '0 4px', color: '#6b7280' }}>engine</legend>
+            <label
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginRight: 12 }}
+            >
+              <input type="radio" name="engine" value="v1" defaultChecked />
+              <span>v1 (直接 SDK)</span>
+            </label>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <input type="radio" name="engine" value="v2" />
+              <span>v2 (LangGraph)</span>
+            </label>
+          </fieldset>
           <button type="submit" style={primaryButton}>
             + 新規セッション
           </button>
@@ -117,7 +140,19 @@ export default function DraftRoute() {
                 fontSize: 14,
               }}
             >
-              <div style={{ fontWeight: 600 }}>{s.title}</div>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  fontWeight: 600,
+                }}
+              >
+                <EngineBadge engine={s.engine} />
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {s.title}
+                </span>
+              </div>
               <div style={{ fontSize: 11, color: '#6b7280' }}>
                 {s.status === 'completed' ? '完了' : 'ヒアリング中'}
               </div>
@@ -175,7 +210,10 @@ function ActiveSession({ session, isBusy }: { session: DraftSessionWithTurns; is
           alignItems: 'center',
         }}
       >
-        <div style={{ fontWeight: 600 }}>{session.title}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600 }}>
+          <EngineBadge engine={session.engine} />
+          <span>{session.title}</span>
+        </div>
         <div style={{ fontSize: 12, color: '#6b7280' }}>
           status: <strong>{session.status}</strong>
         </div>
@@ -428,6 +466,31 @@ function Markdown({ content }: { content: string }) {
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return <h2 style={{ fontSize: 15, margin: 0, color: '#111827', fontWeight: 700 }}>{children}</h2>;
+}
+
+function EngineBadge({ engine }: { engine: DraftEngine }) {
+  const colors =
+    engine === 'v2'
+      ? { bg: '#f5f3ff', fg: '#6d28d9', border: '#ddd6fe' }
+      : { bg: '#f3f4f6', fg: '#374151', border: '#e5e7eb' };
+  return (
+    <span
+      data-testid={`engine-badge-${engine}`}
+      style={{
+        display: 'inline-block',
+        padding: '1px 6px',
+        borderRadius: 4,
+        background: colors.bg,
+        color: colors.fg,
+        border: `1px solid ${colors.border}`,
+        fontSize: 10,
+        fontWeight: 700,
+        letterSpacing: 0.5,
+      }}
+    >
+      {engine === 'v2' ? 'v2 LG' : 'v1'}
+    </span>
+  );
 }
 
 function isFilled(v: string | number | undefined | null): boolean {

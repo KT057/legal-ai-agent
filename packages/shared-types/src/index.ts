@@ -79,6 +79,7 @@ export interface ResearchResult {
 export type DraftPhase = 'hearing' | 'draft' | 'review' | 'revised';
 export type DraftTurnRole = 'user' | 'assistant' | 'system';
 export type DraftStatus = 'hearing' | 'completed';
+export type DraftEngine = 'v1' | 'v2';
 
 export interface RequirementsDraft {
   disclosingParty?: string;
@@ -117,6 +118,7 @@ export interface DraftSession {
   title: string;
   requirements: RequirementsDraft;
   status: DraftStatus;
+  engine: DraftEngine;
   createdAt: string;
   updatedAt: string;
 }
@@ -137,6 +139,7 @@ export interface DraftSessionWithTurns extends DraftSession {
 
 export interface CreateDraftSessionRequest {
   title?: string;
+  engine?: DraftEngine;
 }
 
 export interface PostDraftHearingRequest {

@@ -139,3 +139,40 @@ export async function draftGenerateFull(input: {
   }
   return (await res.json()) as AiDraftGenerateResponse;
 }
+
+// ─── v2 (LangGraph) 版 ──────────────────────────────────────────────
+// レスポンス shape は v1 と完全に同じ。エンドポイントだけ /draft-v2/* に向ける。
+
+export async function draftHearingTurnV2(input: {
+  history: { role: 'user' | 'assistant'; content: string }[];
+  userMessage: string;
+  currentRequirements: RequirementsDraft;
+}): Promise<AiDraftHearingResponse> {
+  const res = await fetch(`${env.AI_SERVICE_URL}/draft-v2/hearing`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      history: input.history,
+      userMessage: input.userMessage,
+      currentRequirements: input.currentRequirements,
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`AI service /draft-v2/hearing failed: ${res.status} ${await res.text()}`);
+  }
+  return (await res.json()) as AiDraftHearingResponse;
+}
+
+export async function draftGenerateFullV2(input: {
+  requirements: RequirementsDraft;
+}): Promise<AiDraftGenerateResponse> {
+  const res = await fetch(`${env.AI_SERVICE_URL}/draft-v2/generate`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ requirements: input.requirements }),
+  });
+  if (!res.ok) {
+    throw new Error(`AI service /draft-v2/generate failed: ${res.status} ${await res.text()}`);
+  }
+  return (await res.json()) as AiDraftGenerateResponse;
+}
